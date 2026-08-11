@@ -1,0 +1,24 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc = "0.8.28"
+optimizer = true
+optimizer_runs = 200
+# executeTrade has enough locals (policy checks + swap accounting) to hit
+# "stack too deep" without via-ir.
+via_ir = true
+fs_permissions = [{ access = "read", path = "./" }]
+
+[fuzz]
+runs = 256
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = true
+quote_style = "double"
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

@@ -1,0 +1,112 @@
+/* GENERATED FILE — do not edit by hand.
+ * Edit packages/shared/src/design/tokens.ts and run:
+ *   pnpm --filter @puno/shared generate:css
+ */
+
+@theme {
+  /* Colors — core */
+  --color-forest-canopy: #203400;
+  --color-vault-floor: #1b2d00;
+  --color-canopy-mid: #335400;
+  --color-lime-phosphor: #bdff00;
+  --color-moss-border: #586740;
+  --color-fern: #73a303;
+  --color-white: #ffffff;
+
+  /* Colors — signal (see tokens.ts for the contrast correction on red) */
+  --color-signal-red: #ff6b4a;
+  --color-signal-amber: #ffb020;
+
+  /* Colors — neutral (white-opacity scale, no gray hexes — 1.2) */
+  --color-white-muted: rgba(255, 255, 255, 0.62);
+  --color-white-faint: rgba(255, 255, 255, 0.38);
+  --color-row-hover: rgba(255, 255, 255, 0.04);
+
+  /* Colors — semantic aliases (1.5) */
+  --color-pnl-profit: var(--color-lime-phosphor);
+  --color-pnl-loss: var(--color-signal-red);
+  --color-pnl-zero: var(--color-white-muted);
+  --color-agent-idle: var(--color-white-faint);
+  --color-agent-armed: var(--color-fern);
+  --color-agent-running: var(--color-lime-phosphor);
+  --color-agent-paused: var(--color-signal-amber);
+  --color-agent-error: var(--color-signal-red);
+  --color-agent-halted: var(--color-signal-red);
+  --color-tx-pending: var(--color-signal-amber);
+  --color-tx-confirmed: var(--color-lime-phosphor);
+  --color-tx-failed: var(--color-signal-red);
+  --color-tx-dropped: var(--color-white-muted);
+
+  /* Font families */
+  --font-denim-ink:
+    "Denim Ink", "Space Grotesk", "Inter Tight", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-jetbrains-mono:
+    "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-courier-new: "Courier New", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* Type scale — Denim Ink, poster density (unchanged from original spec) */
+  --text-body-sm: 16px;
+  --text-body-sm--line-height: 1.5;
+  --text-body-sm--letter-spacing: -0.32px;
+  --text-body: 20px;
+  --text-body--line-height: 1.5;
+  --text-body--letter-spacing: -0.4px;
+  --text-subheading: 32px;
+  --text-subheading--line-height: 1.2;
+  --text-subheading--letter-spacing: -0.7px;
+  --text-heading-sm: 40px;
+  --text-heading-sm--line-height: 1.1;
+  --text-heading-sm--letter-spacing: -0.88px;
+  --text-heading: 64px;
+  --text-heading--line-height: 1;
+  --text-heading--letter-spacing: -1.35px;
+  --text-display: 94px;
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -4.23px;
+
+  /* Type scale — Denim Ink, terminal density (new — 1.4) */
+  --text-app-caption: 12px;
+  --text-app-caption--line-height: 1.35;
+  --text-app-caption--letter-spacing: -0.005em;
+  --text-app-body-sm: 13px;
+  --text-app-body-sm--line-height: 1.45;
+  --text-app-body-sm--letter-spacing: -0.01em;
+  --text-app-body: 14px;
+  --text-app-body--line-height: 1.5;
+  --text-app-body--letter-spacing: -0.01em;
+  --text-app-body-lg: 16px;
+  --text-app-body-lg--line-height: 1.5;
+  --text-app-body-lg--letter-spacing: -0.015em;
+  --text-app-heading-sm: 20px;
+  --text-app-heading-sm--line-height: 1.3;
+  --text-app-heading-sm--letter-spacing: -0.02em;
+  --text-app-heading: 28px;
+  --text-app-heading--line-height: 1.2;
+  --text-app-heading--letter-spacing: -0.025em;
+
+  /* Type scale — JetBrains Mono, tabular numerics (new — 1.4) */
+  --text-num-xs: 11px;
+  --text-num-xs--line-height: 1.2;
+  --text-num-xs--letter-spacing: 0;
+  --text-num-sm: 12px;
+  --text-num-sm--line-height: 1.2;
+  --text-num-sm--letter-spacing: 0;
+  --text-num: 14px;
+  --text-num--line-height: 1.3;
+  --text-num--letter-spacing: 0;
+  --text-num-lg: 24px;
+  --text-num-lg--line-height: 1.2;
+  --text-num-lg--letter-spacing: 0;
+  --text-num-xl: 32px;
+  --text-num-xl--line-height: 1.1;
+  --text-num-xl--letter-spacing: 0;
+
+  /* Courier New — decorative micro-label only, never a data role */
+  --text-courier-micro: 8px;
+  --text-courier-micro--line-height: 1;
+  --text-courier-micro--letter-spacing: -0.14em;
+
+  /* Radius — only the density-invariant pill; role radii are runtime vars, see variables.css */
+  --radius-pills: 9999px;
+}
