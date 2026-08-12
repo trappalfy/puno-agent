@@ -1,0 +1,143 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+@import "@puno/shared/design/tailwind-theme.css";
+@import "@puno/shared/design/variables.css";
+
+/*
+ * apps/web loads Denim Ink's substitute (Space Grotesk) and JetBrains Mono
+ * as self-hosted local fonts via next/font, which Vite has no equivalent
+ * for — a plain @import above, plus the same head-of-stack override
+ * apps/web's globals.css uses so the generated tailwind-theme.css's family
+ * strings still resolve.
+ */
+:root {
+  --font-denim-ink: "Space Grotesk", "Inter Tight", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-jetbrains-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas,
+    monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--color-forest-canopy);
+  color: var(--color-white);
+  font-family: var(--font-denim-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: color-mix(in oklab, var(--color-lime-phosphor) 30%, transparent);
+}
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* ---------------------------------------------------------------------------
+ * Cinematic-surface exception (DESIGN.md — apps/site only). Gradients,
+ * backdrop-blur and glow are used below; content surfaces elsewhere in the
+ * product stay flat per the unmodified rule.
+ * ------------------------------------------------------------------------- */
+
+.liquid-glass {
+  background: color-mix(in oklab, var(--color-white) 3%, transparent);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px color-mix(in oklab, var(--color-white) 10%, transparent);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  /* Lime-tinted edge, not white — the prompt's card treatment adapted to our
+     one accent color rather than a neutral highlight. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-lime-phosphor) 45%, transparent) 0%,
+    color-mix(in oklab, var(--color-lime-phosphor) 15%, transparent) 20%,
+    transparent 40%,
+    transparent 60%,
+    color-mix(in oklab, var(--color-lime-phosphor) 15%, transparent) 80%,
+    color-mix(in oklab, var(--color-lime-phosphor) 45%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Headline gradient sweep — the h1's second line only. */
+.text-shiny {
+  background-image: linear-gradient(
+    to right,
+    var(--color-vault-floor) 0%,
+    var(--color-canopy-mid) 12.5%,
+    var(--color-fern) 32.5%,
+    var(--color-lime-phosphor) 50%,
+    var(--color-canopy-mid) 67.5%,
+    var(--color-vault-floor) 87.5%,
+    var(--color-vault-floor) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: shiny 6s linear infinite;
+}
+
+@keyframes shiny {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-shiny {
+    animation: none;
+    background-position: 0% center;
+  }
+}
+
+/* Pricing watermark, second line — simplifies below 1024px: no gradient, no
+   noise filter, solid lime instead. Matches the source prompt's own mobile
+   fallback for this element (heavy filter + huge type is a real cost on
+   small/low-power devices, more than it is anywhere else on the page). */
+@media (max-width: 1024px) {
+  .text-watermark-line2 {
+    background: none;
+    -webkit-text-fill-color: var(--color-lime-phosphor);
+    color: var(--color-lime-phosphor);
+    filter: none;
+    animation: none;
+  }
+}
+
+/* Pricing grid: horizontal scroll-snap below 1024px (see PricingSection). */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

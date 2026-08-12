@@ -55,6 +55,8 @@ loss:    ▼ −$412.08     --color-pnl-loss     (signal red)
 zero:      $0.00        --color-pnl-zero     (white-muted)
 ```
 
+**Exception — inside a Featured Lime Panel.** Lime-on-lime is invisible, so a P&L value rendered on a lime surface can't use `--color-pnl-profit` as-is: profit renders `vault-floor` instead. Signal red measures only 2.34:1 on lime-phosphor — well under even the 3:1 UI floor — so loss renders `vault-floor` too, not signal red. The rule's intent still holds: sign and directional triangle are unchanged and still carry the meaning on their own; only the color substitution is local to this one surface.
+
 **Agent status** — an 8px dot + label, one color per state:
 
 | State     | Token                   | Color             | Label   |
@@ -199,6 +201,7 @@ The original spec didn't address motion at all — trading data changing in real
 - **`running` status dot** — 2s pulse, opacity 1 → 0.4 → 1.
 - No shimmer gradients (would violate the no-gradients rule), no parallax.
 - `@media (prefers-reduced-motion: reduce)` zeroes out flash and pulse durations at the token level (`--motion-flash-in`, `--motion-flash-out`, `--motion-pulse` → `0ms`) — any component consuming those variables gets an instant color change for free, with no per-component media query needed.
+- **Decorative rotation** (new) — the one motion class outside data display: the 3D-ASCII illustrations above auto-rotate and respond to drag. It's scoped tightly — it stops off-viewport (`IntersectionObserver`) and on a hidden tab, and under `prefers-reduced-motion: reduce` auto-rotation doesn't start at all (a static frame renders instead), though dragging still works since that's motion the user asked for, not motion the page imposed.
 
 ## Accessibility — verifiable requirements
 
@@ -221,6 +224,8 @@ The original spec didn't address motion at all — trading data changing in real
 
 Terminal density goes below 16px in exactly two places: 11px chart axis labels (`num-xs`) and 12px table cells (`num-sm`/`app-caption`). This is a deliberate, scoped exception — data density is a functional requirement of a trading UI, and a position table set at 16px per cell is unreadable once it needs to scroll. The 16px floor still applies without exception to poster density and to all prose anywhere in the product.
 
+The rotating 3D-ASCII illustrations (see Imagery) are exempt from the 16px floor entirely rather than by a size number — their glyphs are image, not prose, sized in the single digits at typical viewport widths (`font-size: calc(100cqw / 33.6)`). They carry `aria-hidden` and are paired with a plain-text alternative (the component's `title` prop, rendered `sr-only`), the same pattern already used for `DotMatrix`'s decorative SVGs — so nothing depends on a screen reader parsing the glyphs at all, which is what the 16px floor exists to protect against.
+
 ## Do's and Don'ts
 
 ### Do
@@ -241,9 +246,13 @@ Terminal density goes below 16px in exactly two places: 11px chart axis labels (
 - Do not introduce drop shadows for elevation — layers separate through color-tier shifts only.
 - Do not use gray hexes (`#808080`, `#999`, etc.) anywhere — green-monochrome surfaces, white-opacity text, plus exactly two signal colors.
 - Never set body text below 16px, except the 8px Courier New micro-label and the two documented terminal-density exceptions above (11px axis labels, 12px table cells).
-- Do not add gradients, including shimmer/skeleton gradients — flat color blocks and opacity pulses only.
+- Do not add gradients, including shimmer/skeleton gradients — flat color blocks and opacity pulses only. The terminal/phosphor aesthetic depends on flat color.
 - Do not use Denim Ink weight 700 below 32px — reserve it for display-scale moments.
 - Do not let a status or P&L value rely on color as its only signal.
+
+### Documented exception — apps/site's cinematic surface
+
+The public marketing site (`apps/site`, a separate Vite app — see Layout below) is allowed gradients, `backdrop-filter` blur, and glow that the rules above forbid everywhere else: the shiny headline sweep, `liquid-glass` card edges, and the radial glow behind the closing CTA. It's scoped narrowly and for a specific reason — none of it: the rules exist so a trading UI's data stays legible (a gradient behind a number, or a shadow implying a card floats, both work against reading state at a glance), and a cinematic marketing surface with zero live data has none of that to protect. `apps/web`'s actual product UI (`/app`, and `/pricing`'s transactional cards) is untouched by this — every rule above still applies there without exception, including no gray hexes and no filled color besides lime.
 
 ## Surfaces
 
@@ -260,9 +269,13 @@ Signal Red and Signal Amber are not surface tiers — they're state signals laye
 
 Minimal illustrative photography; the brand favors flat lime-green geometric illustrations — candlestick clusters, order-book grids, node/graph motifs — rendered in a pixelated/dot-matrix style that echoes the phosphor-terminal aesthetic. Imagery is always contained within a rounded-corner panel (poster: 32px radius), never full-bleed. No lifestyle photography, no people — the visual language is abstract-tech and data-focused. The only color used in illustrations is lime as line-art on the dark canvas, or as a full solid-lime panel with white/green content inside. Icon style is line-based, thin stroke, monochromatic white or lime.
 
+This governs `apps/web`'s poster surfaces (`/pricing`). The public marketing site's own imagery (video background, glass cards) is covered by the cinematic-surface exception under Do's and Don'ts, not by this section.
+
 ## Layout
 
-**Poster (marketing site).** Full-bleed dark canvas with a centered max-width content column (~1280px). Slim top nav: logo left, nav center, login + lime CTA right. Hero is a two-column split: text (60%) left, decorative illustration (40%) right. Sections alternate text-left/visual-right two-column layouts and full-width centered headline stacks, separated by hairline dividers, each introduced by a lime-dot eyebrow label. 80px vertical rhythm between sections.
+**Marketing site (`apps/site`, Vite — separate from the product).** A cinematic single-page site: fixed looping background video, `liquid-glass` cards, a shiny lime-gradient headline sweep. Structure: nav (logo + links + primary CTA) → hero (headline, subhead, CTA) → a terminal-styled status strip → a live console mock (agent sidebar / signal feed / Reasoning Card reader, reusing the same three-pane anatomy terminal density uses) → cost-routing explainer → built-on logos → guarantee cards → pricing (real tiers, from `@puno/shared`'s `TIERS` — never a second, hand-maintained copy) → closing CTA. Every CTA and pricing action links out to `apps/web` (`/app/agents/new`, `/pricing`) rather than reimplementing wallet/checkout — this app has no server, so it can't hold the secrets those need. See `apps/site`'s own README/plan for the split's rationale.
+
+**Poster (`apps/web`, marketing-styled product surfaces).** Now scoped to `/pricing` — a transactional page, not the landing page — plus any future marketing-adjacent page that needs real backend access. Full-bleed dark canvas with a centered max-width content column (~1280px), lime-dot eyebrow labels, 80px vertical rhythm. `/`'s own route is just a redirect into `/app`.
 
 **Terminal (product, `/app`).** No hero, no marketing rhythm. A persistent left rail (agent list, account) plus a main content column that runs fluid above a 1280px minimum width — tables and charts get the width they need rather than being centered into a fixed column. Density comes from the terminal spacing scale (§ Tokens — Density), not from the poster page's generous gaps. Cards still separate purely by color-tier shift, never by shadow.
 

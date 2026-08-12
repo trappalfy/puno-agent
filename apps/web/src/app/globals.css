@@ -1,0 +1,43 @@
+@import "tailwindcss";
+@import "@puno/shared/design/tailwind-theme.css";
+@import "@puno/shared/design/variables.css";
+
+/* Tailwind v4's automatic source detection wasn't picking up this app's own
+   .tsx files in this monorepo layout (verified: zero utility classes, not
+   even built-ins like .flex, were emitted) — declared explicitly instead of
+   relying on it. Path is relative to this file (src/app/). */
+@source "../**/*.{ts,tsx}";
+
+/* next/font self-hosts Space Grotesk / JetBrains Mono under scoped local
+   names exposed as these two CSS vars (see layout.tsx) — the generated
+   tailwind-theme.css references the literal family strings, which only
+   resolve if the font is available another way, so we override the head of
+   each stack here rather than editing the generated file (DESIGN.md 1.4). */
+:root {
+  --font-denim-ink:
+    var(--font-space-grotesk), "Inter Tight", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-jetbrains-mono:
+    var(--font-jetbrains-mono-loaded), ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--color-forest-canopy);
+  color: var(--color-white);
+  font-family: var(--font-denim-ink);
+}
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
