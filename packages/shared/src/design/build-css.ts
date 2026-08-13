@@ -36,6 +36,24 @@ function checkContrast(): boolean {
     }
   }
 
+  // The featured lime panel (poster hero) inverts the scheme: lime becomes the
+  // surface. Only the pairs actually used there are checked — a cross-product
+  // would include white-on-lime (1.20:1), which is never rendered and would
+  // fail the gate for no reason. signal-red on lime is 2.34:1, which is why
+  // loss inside the panel renders vault-floor with a ▼ (see DESIGN.md 1.5).
+  console.log("  — on lime-phosphor (featured panel surface) —");
+  const onLime = {
+    "vault-floor": color.core.vaultFloor,
+    "forest-canopy": color.core.forestCanopy,
+  };
+  for (const [fgName, fgHex] of Object.entries(onLime)) {
+    const ratio = contrastRatio(fgHex, color.core.limePhosphor);
+    if (ratio < WCAG_AA_LARGE_TEXT_OR_UI) allPass = false;
+    const verdict =
+      ratio >= WCAG_AA_TEXT ? "PASS text" : ratio >= WCAG_AA_LARGE_TEXT_OR_UI ? "PASS large/UI only" : "FAIL";
+    console.log(`  ${fgName} on lime-phosphor: ${ratio.toFixed(2)}:1 — ${verdict}`);
+  }
+
   console.log("");
   return allPass;
 }

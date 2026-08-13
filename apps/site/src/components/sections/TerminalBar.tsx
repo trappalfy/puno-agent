@@ -14,10 +14,15 @@ const TABS = ["Vault", "Signals", "Policy", "Limits"];
 
 export function TerminalBar() {
   return (
+    // Was a timed `animate` with a 0.9s delay, choreographed against the hero
+    // back when both were on screen together. The hero now owns the whole
+    // viewport, so that entrance would have played to nobody and the bar would
+    // already be sitting there by the time anyone scrolled to it.
     <motion.div
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.9, duration: 0.6 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.6 }}
       className="relative z-10 h-10 bg-vault-floor/40 backdrop-blur-md border-t border-b border-white/10"
     >
       <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between text-xs">

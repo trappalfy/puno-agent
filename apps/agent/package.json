@@ -1,0 +1,33 @@
+{
+  "name": "@puno/agent",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/main.ts",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "compare:report": "tsx src/compare/report.ts",
+    "test": "node --import tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
+    "@puno/shared": "workspace:*",
+    "dotenv": "^17.2.4",
+    "drizzle-orm": "^0.44.6",
+    "postgres": "^3.4.7",
+    "viem": "^2.38.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/node": "^22.10.5",
+    "drizzle-kit": "^0.31.6",
+    "tsx": "^4.20.6",
+    "typescript": "^5.7.3"
+  }
+}

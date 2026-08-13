@@ -14,11 +14,20 @@ export function Navbar() {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
-      className="relative z-20 max-w-6xl mx-auto px-6 py-5 flex items-center justify-between"
+      // w-full is load-bearing: as a flex child, `mx-auto` makes the auto
+      // margins win over stretch, so the bar shrank to fit its contents and
+      // justify-between had no free space left to push the logo, links and CTA
+      // apart. shrink-0 keeps it from being squeezed vertically by the hero.
+      className="relative z-20 w-full max-w-6xl shrink-0 mx-auto px-6 py-5 flex items-center justify-between"
     >
-      <a href="#top" className="flex items-center gap-2 text-white">
+      {/* Space Grotesk reports unitsPerEm 1000 / sCapHeight 700 in its OS/2
+          table, so a capital is exactly 0.70em; matching the mark's true 28px
+          would take 40px. Set to 36 by eye instead — a cap a shade under the
+          mark reads as a lockup rather than a collision. leading-none keeps
+          the line box from padding the bar's height. */}
+      <a href="#top" className="flex items-center gap-3 text-white">
         <LogoMark className="w-7 h-7" />
-        <span className="font-semibold tracking-tight">Puno</span>
+        <span className="text-[36px] leading-none font-semibold tracking-tight">Puno</span>
       </a>
 
       <div className="hidden md:flex gap-8">

@@ -38,6 +38,13 @@ abstract contract VaultTestBase is Test {
     uint256 internal constant MIN_SECONDS_BETWEEN_TRADES = 60;
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
 
+    // Mirrors the real chain: on Robinhood Chain the equity feeds refresh on
+    // deviation every few minutes, while USDG/USD is a peg that only moves on
+    // its 24h heartbeat. The fixture uses matching windows so tests exercise
+    // the same asymmetry production has.
+    uint32 internal constant USDG_STALENESS = 26 hours;
+    uint32 internal constant STOCK_STALENESS = 1 hours;
+
     // Tests track "now" themselves rather than re-reading block.timestamp
     // after a warp: under via-ir (needed elsewhere for executeTrade's local
     // count), solc can treat repeated block.timestamp reads within one
@@ -74,8 +81,8 @@ abstract contract VaultTestBase is Test {
         vault = AgentVault(factory.createVault());
 
         vm.startPrank(ownerAddr);
-        vault.setPriceFeed(address(usdg), address(usdgFeed));
-        vault.setPriceFeed(address(stock), address(stockFeed));
+        vault.setPriceFeed(address(usdg), address(usdgFeed), USDG_STALENESS);
+        vault.setPriceFeed(address(stock), address(stockFeed), STOCK_STALENESS);
 
         AgentVault.Policy memory policy = _defaultPolicy();
         vault.setPolicy(policy);

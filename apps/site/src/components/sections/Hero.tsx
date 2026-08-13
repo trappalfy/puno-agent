@@ -1,10 +1,11 @@
 import { motion } from "motion/react";
+import { ChevronDown } from "lucide-react";
 import { CtaButton } from "../primitives/CtaButton";
 import { links } from "../../lib/config";
 
 export function Hero() {
   return (
-    <section className="relative z-10 pt-16 md:pt-28 pb-20 px-6 text-center flex flex-col items-center">
+    <section className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
       <motion.h1
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -37,6 +38,27 @@ export function Hero() {
         <CtaButton href={links.createAgent} label="Create an agent" />
         <span className="text-xs text-white/40">Testnet live on Robinhood Chain · 46630</span>
       </motion.div>
+
+      {/* Nothing is visible below the fold now, so without a cue a full-bleed
+          hero reads as the whole page. Enters last, after the headline and CTA
+          have had their turn. The bob is a motion.* transform, so the app-wide
+          MotionConfig reducedMotion="user" already collapses it. */}
+      <motion.a
+        href="#how-it-works"
+        aria-label="Scroll to see how it works"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.1, duration: 0.8 }}
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/35 transition-colors hover:text-white"
+      >
+        <motion.span
+          className="block"
+          animate={{ y: [0, 5, 0] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <ChevronDown className="w-5 h-5" aria-hidden />
+        </motion.span>
+      </motion.a>
     </section>
   );
 }

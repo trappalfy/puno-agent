@@ -1,0 +1,1 @@
+ALTER TABLE "accounts" ADD COLUMN "geo_consent_at" timestamp with time zone;

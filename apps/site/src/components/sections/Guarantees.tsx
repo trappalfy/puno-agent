@@ -9,7 +9,10 @@ import { GUARANTEES } from "../../lib/copy";
  */
 export function Guarantees() {
   return (
-    <section className="relative z-10 max-w-6xl mx-auto px-6 py-20 md:py-28 border-t border-white/10">
+    <section
+      id="safety"
+      className="relative z-10 max-w-6xl mx-auto px-6 py-20 md:py-28 border-t border-white/10"
+    >
       <div className="grid md:grid-cols-3 gap-6">
         {GUARANTEES.map((g, i) => (
           <motion.figure

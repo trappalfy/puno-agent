@@ -5,6 +5,7 @@ import { Script, console } from "forge-std/Script.sol";
 
 import { AgentVault } from "../src/AgentVault.sol";
 import { VaultFactory } from "../src/VaultFactory.sol";
+import { PunoCredits } from "../src/PunoCredits.sol";
 import { MockStockToken } from "../mocks/MockStockToken.sol";
 import { MockAggregatorV3 } from "../mocks/MockAggregatorV3.sol";
 import { MockRouter } from "../mocks/MockRouter.sol";
@@ -36,6 +37,19 @@ contract DeployTestnet is Script {
     uint256 internal constant MIN_SECONDS_BETWEEN_TRADES = 60;
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
 
+    // Per-feed staleness windows, sized the way mainnet's real feeds behave:
+    // Chainlink's equity feeds on Robinhood Chain republish on deviation every
+    // few minutes, while USDG/USD is a peg that only moves on its 24h
+    // heartbeat. The mocks below always report a fresh timestamp, so these
+    // values are documentation of production's asymmetry as much as config —
+    // a single short threshold here would look fine and break on mainnet.
+    uint32 internal constant QUOTE_STALENESS = 26 hours;
+    uint32 internal constant EQUITY_STALENESS = 1 hours;
+
+    // Mock PUNO supply for exercising the credit top-up flow end to end.
+    uint256 internal constant PUNO_MINT = 1_000_000e18;
+    uint256 internal constant PUNO_MIN_DEPOSIT = 1e18;
+
     function run() external {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
@@ -62,9 +76,9 @@ contract DeployTestnet is Script {
 
         AgentVault vault = AgentVault(factory.createVault());
 
-        vault.setPriceFeed(address(usdg), address(usdgFeed));
-        vault.setPriceFeed(address(tsla), address(tslaFeed));
-        vault.setPriceFeed(address(aapl), address(aaplFeed));
+        vault.setPriceFeed(address(usdg), address(usdgFeed), QUOTE_STALENESS);
+        vault.setPriceFeed(address(tsla), address(tslaFeed), EQUITY_STALENESS);
+        vault.setPriceFeed(address(aapl), address(aaplFeed), EQUITY_STALENESS);
 
         address[] memory routers = new address[](1);
         routers[0] = address(router);
@@ -88,6 +102,13 @@ contract DeployTestnet is Script {
         // Light funding so the demo vault can trade immediately after deploy.
         usdg.mint(address(vault), 1_000e6);
 
+        // Billing sandbox: a stand-in PUNO plus the payment contract, so the
+        // approve -> deposit -> watcher -> credit path can be exercised without
+        // waiting for the real token. The deployer gets the supply to test with.
+        MockStockToken puno = new MockStockToken("Mock Puno Token", "PUNO", 18);
+        PunoCredits credits = new PunoCredits(address(puno), deployer, PUNO_MIN_DEPOSIT);
+        puno.mint(deployer, PUNO_MINT);
+
         vm.stopBroadcast();
 
         console.log("Deployer            ", deployer);
@@ -100,5 +121,12 @@ contract DeployTestnet is Script {
         console.log("MockRouter          ", address(router));
         console.log("VaultFactory        ", address(factory));
         console.log("Demo AgentVault     ", address(vault));
+        console.log("Mock PUNO           ", address(puno));
+        console.log("PunoCredits         ", address(credits));
+        console.log("");
+        console.log("Put VaultFactory / Mock PUNO / PunoCredits into");
+        console.log("packages/shared/src/network/config.ts (testnet.vaultFactory,");
+        console.log("testnet.punoToken, testnet.punoCredits), then set a PUNO/USD");
+        console.log("rate in token_price_overrides or no deposit can be credited.");
     }
 }

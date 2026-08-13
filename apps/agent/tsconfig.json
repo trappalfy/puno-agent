@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"],
+    // This is a runtime app, not a library other workspace packages import
+    // types from (unlike packages/shared) — declaration output is unneeded,
+    // and viem's client types are deep enough that TS can't always name them
+    // portably for a .d.ts without extra annotations (TS2742).
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src"]
+}

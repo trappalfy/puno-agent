@@ -269,7 +269,8 @@ contract AgentVaultPolicyTest is VaultTestBase {
     }
 
     function test_RevertWhen_PriceIsStale() public {
-        vm.warp(block.timestamp + 2 hours); // > STALENESS_THRESHOLD, feeds never refreshed
+        // Past the stock feed's own 1h window; both feeds are never refreshed.
+        vm.warp(block.timestamp + 2 hours);
         vm.prank(ownerAddr);
         vm.expectRevert("AgentVault: stale price");
         vault.executeTrade(
@@ -280,6 +281,83 @@ contract AgentVaultPolicyTest is VaultTestBase {
             address(router),
             _tradeCalldata(FAIR_AMOUNT_IN, FAIR_AMOUNT_OUT)
         );
+    }
+
+    /// The regression this whole per-feed mechanism exists for. On mainnet the
+    /// USDG/USD feed is a peg that only republishes on its 24h heartbeat — it
+    /// was 22 hours old when measured against the live chain. Under the old
+    /// single 1-hour threshold every trade reverted on the quote token's price,
+    /// roughly 23 hours out of every 24, and no mock-based testnet run could
+    /// ever surface it because MockAggregatorV3 stamps block.timestamp.
+    function test_QuoteTokenOnASlowHeartbeat_DoesNotBlockTrading() public {
+        // 20 hours on: well past a 1h window, still inside USDG's 26h one.
+        vm.warp(block.timestamp + 20 hours);
+        // The equity feed is live and republishing, as it is in production.
+        stockFeed.setRoundData(int256(STOCK_PRICE), block.timestamp);
+
+        vm.prank(ownerAddr);
+        vault.executeTrade(
+            address(usdg),
+            address(stock),
+            FAIR_AMOUNT_IN,
+            FAIR_MIN_OUT_FLOOR,
+            address(router),
+            _tradeCalldata(FAIR_AMOUNT_IN, FAIR_AMOUNT_OUT)
+        );
+
+        assertEq(stock.balanceOf(address(vault)), FAIR_AMOUNT_OUT);
+    }
+
+    function test_RevertWhen_SlowFeedFinallyExceedsItsOwnWindow() public {
+        // Same setup, but now past USDG's 26h window too — the quote feed is
+        // genuinely dead and the vault must refuse.
+        vm.warp(block.timestamp + 27 hours);
+        stockFeed.setRoundData(int256(STOCK_PRICE), block.timestamp);
+
+        vm.prank(ownerAddr);
+        vm.expectRevert("AgentVault: stale price");
+        vault.executeTrade(
+            address(usdg),
+            address(stock),
+            FAIR_AMOUNT_IN,
+            FAIR_MIN_OUT_FLOOR,
+            address(router),
+            _tradeCalldata(FAIR_AMOUNT_IN, FAIR_AMOUNT_OUT)
+        );
+    }
+
+    // -- price feed configuration --------------------------------------------
+
+    function test_SetPriceFeed_StoresThePerFeedWindow() public {
+        (address aggregator, uint8 decimals_, uint32 maxStaleness) = vault.priceFeeds(address(usdg));
+        assertEq(aggregator, address(usdgFeed));
+        assertEq(decimals_, 8);
+        assertEq(maxStaleness, USDG_STALENESS);
+    }
+
+    function test_RevertWhen_StalenessWindowIsZero() public {
+        vm.prank(ownerAddr);
+        vm.expectRevert("AgentVault: zero staleness window");
+        vault.setPriceFeed(address(usdg), address(usdgFeed), 0);
+    }
+
+    // The cap is read into a local first in both tests below. Left inline in the
+    // argument list it becomes the "next call" that vm.prank and vm.expectRevert
+    // attach to, so the prank is spent on a view and the assertion never reaches
+    // setPriceFeed at all.
+    function test_RevertWhen_StalenessWindowExceedsTheCap() public {
+        uint32 overCap = uint32(vault.MAX_STALENESS_LIMIT() + 1);
+        vm.prank(ownerAddr);
+        vm.expectRevert("AgentVault: staleness window too long");
+        vault.setPriceFeed(address(usdg), address(usdgFeed), overCap);
+    }
+
+    function test_SetPriceFeed_AcceptsExactlyTheCap() public {
+        uint32 cap = uint32(vault.MAX_STALENESS_LIMIT());
+        vm.prank(ownerAddr);
+        vault.setPriceFeed(address(usdg), address(usdgFeed), cap);
+        (,, uint32 maxStaleness) = vault.priceFeeds(address(usdg));
+        assertEq(maxStaleness, cap);
     }
 
     // -- pause / kill switch -------------------------------------------------

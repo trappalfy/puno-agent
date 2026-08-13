@@ -29,9 +29,14 @@ contract AgentVault is ReentrancyGuard {
 
     uint256 public constant BPS_DENOMINATOR = 10_000;
 
-    /// @dev Chainlink price older than this is treated as unusable — trades
-    /// and NAV/fee reads revert rather than act on stale data.
-    uint256 public constant STALENESS_THRESHOLD = 1 hours;
+    /// @dev Ceiling on any single feed's configured staleness window. Feeds
+    /// differ by more than an order of magnitude — on Robinhood Chain the
+    /// equity feeds refresh every few minutes on deviation while USDG/USD only
+    /// moves on its 24h heartbeat — so the window is per-feed (see
+    /// PriceFeed.maxStaleness), not one constant. This cap exists so that
+    /// "configurable" can't become "effectively disabled": two days is roughly
+    /// double the longest documented heartbeat on this chain.
+    uint256 public constant MAX_STALENESS_LIMIT = 2 days;
 
     uint256 public constant NOTIONAL_WINDOW = 1 days;
 
@@ -88,6 +93,12 @@ contract AgentVault is ReentrancyGuard {
     struct PriceFeed {
         address aggregator;
         uint8 priceDecimals;
+        /// @dev How old this specific feed's answer may be before it is refused,
+        /// in seconds. Must be set to the feed's own heartbeat plus a margin: a
+        /// single global threshold either rejects a healthy stablecoin feed that
+        /// legitimately only updates daily, or accepts an equity feed that has
+        /// been dead for hours. Packs into the same slot as the two fields above.
+        uint32 maxStaleness;
     }
 
     /// @dev Owner-controlled. executeTrade's caller (the agent) never supplies
@@ -130,7 +141,7 @@ contract AgentVault is ReentrancyGuard {
     event AgentSet(address indexed agent, uint256 expiry);
     event AgentRevoked();
     event PolicyUpdated();
-    event PriceFeedSet(address indexed token, address indexed aggregator);
+    event PriceFeedSet(address indexed token, address indexed aggregator, uint32 maxStaleness);
     event VaultPaused();
     event VaultUnpaused();
     event FeeConfigUpdated(address indexed recipient, uint256 bps);
@@ -183,11 +194,23 @@ contract AgentVault is ReentrancyGuard {
     // Policy configuration
     // ---------------------------------------------------------------------
 
-    function setPriceFeed(address token, address aggregator) external onlyOwner {
+    /// @param maxStaleness Seconds this feed's answer stays usable. Set it from
+    /// the feed's published heartbeat plus a margin — too low and every trade
+    /// reverts between heartbeats, too high and the vault trades on a dead feed.
+    function setPriceFeed(address token, address aggregator, uint32 maxStaleness)
+        external
+        onlyOwner
+    {
         require(aggregator != address(0), "AgentVault: zero aggregator");
+        require(maxStaleness > 0, "AgentVault: zero staleness window");
+        require(maxStaleness <= MAX_STALENESS_LIMIT, "AgentVault: staleness window too long");
         uint8 priceDecimals = AggregatorV3Interface(aggregator).decimals();
-        priceFeeds[token] = PriceFeed({ aggregator: aggregator, priceDecimals: priceDecimals });
-        emit PriceFeedSet(token, aggregator);
+        priceFeeds[token] = PriceFeed({
+            aggregator: aggregator,
+            priceDecimals: priceDecimals,
+            maxStaleness: maxStaleness
+        });
+        emit PriceFeedSet(token, aggregator, maxStaleness);
     }
 
     function setPolicy(Policy calldata policy) external onlyOwner {
@@ -382,8 +405,8 @@ contract AgentVault is ReentrancyGuard {
     // ---------------------------------------------------------------------
 
     /// @dev USD value (1e18 fixed point) of `rawAmount` of `token`, per its
-    /// configured Chainlink feed. Reverts on missing feed, non-positive
-    /// price, or a price older than STALENESS_THRESHOLD — the vault fails
+    /// configured Chainlink feed. Reverts on missing feed, non-positive price,
+    /// or a price older than that feed's own maxStaleness — the vault fails
     /// closed rather than trading or reporting NAV on bad data.
     function _valueOf(address token, uint256 rawAmount) internal view returns (uint256) {
         if (rawAmount == 0) return 0;
@@ -404,7 +427,7 @@ contract AgentVault is ReentrancyGuard {
         (, int256 answer,, uint256 updatedAt,) =
             AggregatorV3Interface(feed.aggregator).latestRoundData();
         require(answer > 0, "AgentVault: bad price");
-        require(block.timestamp - updatedAt <= STALENESS_THRESHOLD, "AgentVault: stale price");
+        require(block.timestamp - updatedAt <= feed.maxStaleness, "AgentVault: stale price");
         return uint256(answer) * (10 ** (18 - feed.priceDecimals));
     }
 

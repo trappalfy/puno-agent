@@ -152,13 +152,29 @@ export interface DensityTokens {
     elementGap: string;
     maxWidth: string;
     minWidth?: string;
+    /**
+     * Button padding is density-variant. The poster values are landing.md's
+     * literal "padding 18px 32px"; 18 is deliberately off the flat spacing
+     * scale because the spec names it outright. Terminal density can't
+     * inherit that — a 36px-taller button in a dense table row is unusable —
+     * so it gets its own step.
+     */
+    buttonPaddingX: string;
+    buttonPaddingY: string;
   };
 }
 
 export const posterDensity: DensityTokens = {
   unit: "8px",
   radius: { tag: "12px", card: "32px", button: "16px", bodyBlock: "24px", alternateButton: "20px" },
-  layout: { cardPadding: "40px", sectionGap: "80px", elementGap: "24px", maxWidth: "1280px" },
+  layout: {
+    cardPadding: "40px",
+    sectionGap: "80px",
+    elementGap: "24px",
+    maxWidth: "1280px",
+    buttonPaddingX: "32px",
+    buttonPaddingY: "18px",
+  },
 };
 
 export const terminalDensity: DensityTokens = {
@@ -172,6 +188,8 @@ export const terminalDensity: DensityTokens = {
     elementGap: "12px",
     maxWidth: "none",
     minWidth: "1280px",
+    buttonPaddingX: "16px",
+    buttonPaddingY: "8px",
   },
 };
 

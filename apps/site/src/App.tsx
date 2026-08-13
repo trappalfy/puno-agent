@@ -23,8 +23,17 @@ export function App() {
       <div id="top" data-density="poster" className="relative min-h-screen overflow-x-hidden bg-forest-canopy text-white">
         <NoiseFilters />
         <VideoBackground />
-        <Navbar />
-        <Hero />
+
+        {/* Navbar and hero share one viewport-tall column so the hero fills
+            whatever is left under the bar without anyone hardcoding the bar's
+            height. svh rather than vh: on mobile, vh counts the browser chrome
+            that later retracts, which would push the next section partly into
+            view on load — the one thing this layout is meant to prevent. */}
+        <div className="relative z-10 flex min-h-svh flex-col">
+          <Navbar />
+          <Hero />
+        </div>
+
         <TerminalBar />
         <ConsoleMock />
         <CostRouting />

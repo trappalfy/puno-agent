@@ -6,9 +6,12 @@ export function Footer() {
     <footer className="relative z-10 max-w-6xl mx-auto px-6 py-16 border-t border-white/10">
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-white">
+          {/* The navbar lockup scaled down: it runs 36px against a 28px mark,
+              so this 24px mark takes 24 x 36/28 = 31px. Sizing only one of the
+              two would leave them visibly inconsistent. */}
+          <div className="flex items-center gap-2.5 text-white">
             <LogoMark className="w-6 h-6" />
-            <span className="font-semibold">Puno</span>
+            <span className="text-[31px] leading-none font-semibold tracking-tight">Puno</span>
           </div>
           <p className="mt-3 max-w-sm text-sm text-white/50 leading-[1.5]">
             Non-custodial vaults. An agent that can propose trades within limits you set — never

@@ -111,6 +111,8 @@ export function generateVariablesCss(): string {
   lines.push(`  --layout-section-gap: ${posterDensity.layout.sectionGap};`);
   lines.push(`  --layout-element-gap: ${posterDensity.layout.elementGap};`);
   lines.push(`  --layout-max-width: ${posterDensity.layout.maxWidth};`);
+  lines.push(`  --button-padding-x: ${posterDensity.layout.buttonPaddingX};`);
+  lines.push(`  --button-padding-y: ${posterDensity.layout.buttonPaddingY};`);
 
   lines.push("}");
   lines.push("");
@@ -125,6 +127,8 @@ export function generateVariablesCss(): string {
   lines.push(`  --layout-section-gap: ${terminalDensity.layout.sectionGap};`);
   lines.push(`  --layout-element-gap: ${terminalDensity.layout.elementGap};`);
   lines.push(`  --layout-max-width: ${terminalDensity.layout.maxWidth};`);
+  lines.push(`  --button-padding-x: ${terminalDensity.layout.buttonPaddingX};`);
+  lines.push(`  --button-padding-y: ${terminalDensity.layout.buttonPaddingY};`);
   if (terminalDensity.layout.minWidth) {
     lines.push(`  --layout-min-width: ${terminalDensity.layout.minWidth};`);
   }

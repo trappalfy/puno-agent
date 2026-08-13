@@ -22,6 +22,17 @@ export interface NetworkConfig {
   routers: {
     oneInch: Address;
   };
+  // null until a VaultFactory is actually deployed and verified on this
+  // network — see contracts/script/DeployTestnet.s.sol. Never fill this with
+  // an address from a throwaway local Anvil run; those aren't persistent and
+  // would silently point the wizard at a chain that no longer exists.
+  vaultFactory: Address | null;
+  // Billing contracts, same rule as vaultFactory. punoToken is the ERC-20 the
+  // credit balance is topped up with; punoCredits is the payment contract whose
+  // CreditsPurchased events the watcher indexes. Both null until PUNO launches
+  // — every billing path checks for null and says so rather than half-working.
+  punoToken: Address | null;
+  punoCredits: Address | null;
 }
 
 // Verified against https://docs.robinhood.com/chain/connecting (2026-08-11).
@@ -42,6 +53,9 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     routers: {
       oneInch: "0x5A705DE8982235a7fa45bB83dCaCf03a211389C7",
     },
+    vaultFactory: null,
+    punoToken: null,
+    punoCredits: null,
   },
   testnet: {
     key: "testnet",
@@ -61,6 +75,9 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     routers: {
       oneInch: "0x5A705DE8982235a7fa45bB83dCaCf03a211389C7",
     },
+    vaultFactory: null,
+    punoToken: null,
+    punoCredits: null,
   },
 };
 

@@ -12,10 +12,17 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "generate:css": "node src/design/build-css.ts"
+    "generate:css": "node src/design/build-css.ts",
+    "test": "node --import tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.6",
+    "viem": "^2.38.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
 }

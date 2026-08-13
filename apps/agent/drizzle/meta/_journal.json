@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786464326385,
+      "tag": "0000_sour_mister_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786474804832,
+      "tag": "0001_wandering_marvel_boy",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786476251397,
+      "tag": "0002_giant_mac_gargan",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786476580740,
+      "tag": "0003_stale_sally_floyd",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786478275571,
+      "tag": "0004_loud_nextwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786627892076,
+      "tag": "0005_drop_tiers_and_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786627962364,
+      "tag": "0006_credit_ledger_and_token_price",
+      "breakpoints": true
+    }
+  ]
+}

@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { useAccount } from "wagmi";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
-import { TIERS } from "@puno/shared";
+import { useBalance } from "@/lib/hooks/useBalance";
 
 export default function SettingsPage() {
   const { address, isConnected } = useAccount();
@@ -14,15 +14,7 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<string | null>(null);
 
-  const { data } = useQuery({
-    queryKey: ["quota", address],
-    queryFn: async () => {
-      const res = await fetch(`/api/billing/quota?owner=${address}`);
-      if (!res.ok) throw new Error("failed to load account");
-      return res.json() as Promise<{ tier: keyof typeof TIERS; hasByokKey: boolean }>;
-    },
-    enabled: isConnected && !!address,
-  });
+  const { data } = useBalance();
 
   if (!isConnected) {
     return (
@@ -40,9 +32,22 @@ export default function SettingsPage() {
       <h1 className="text-app-heading font-denim-ink font-semibold text-white">Settings</h1>
 
       <Card className="mt-[var(--spacing-24)]">
-        <h2 className="text-app-heading-sm font-denim-ink font-semibold text-white">Plan</h2>
+        <h2 className="text-app-heading-sm font-denim-ink font-semibold text-white">Credit</h2>
         <p className="mt-[var(--spacing-8)] text-app-body text-white-muted">
-          Current tier: <span className="text-white">{data ? TIERS[data.tier].name : "…"}</span>
+          Balance:{" "}
+          <span className="text-white font-jetbrains-mono tabular-nums">
+            {data ? `$${data.balanceUsd.toFixed(2)}` : "…"}
+          </span>
+          {data && !data.usesOwnKey && (
+            <span className="text-white-faint"> · ≈ {data.decisionsRemaining} decisions</span>
+          )}
+        </p>
+        <p className="mt-[var(--spacing-8)] text-app-body-sm text-white-muted">
+          You pay per action, not per month. See{" "}
+          <a href="/pricing" className="text-lime-phosphor underline">
+            pricing
+          </a>{" "}
+          to top up.
         </p>
       </Card>
 
@@ -51,11 +56,11 @@ export default function SettingsPage() {
           Bring your own Anthropic key
         </h2>
         <p className="mt-[var(--spacing-8)] text-app-body-sm text-white-muted">
-          Stored encrypted at rest, never logged, never returned by any API response. Switches your
-          tier to BYOK — Puno-side quota no longer applies.
+          Stored encrypted at rest, never logged, never returned by any API response. With a key set
+          you aren&rsquo;t charged for the agent&rsquo;s thinking — only for trades it executes.
         </p>
         <p className="mt-[var(--spacing-8)] text-num-xs text-white-faint font-jetbrains-mono">
-          {data?.hasByokKey ? "A key is currently set." : "No key set yet."}
+          {data?.usesOwnKey ? "A key is currently set." : "No key set yet."}
         </p>
         <div className="mt-[var(--spacing-16)] flex gap-[var(--spacing-12)]">
           <input
@@ -73,26 +78,26 @@ export default function SettingsPage() {
               const res = await fetch("/api/billing/byok", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({ walletAddress: address, apiKey }),
+                body: JSON.stringify({ apiKey }),
               });
               const json = await res.json();
               setStatus(res.ok ? "Saved." : (json.error ?? "Failed to save."));
               if (res.ok) {
                 setApiKey("");
-                void queryClient.invalidateQueries({ queryKey: ["quota", address] });
+                void queryClient.invalidateQueries({ queryKey: ["balance", address] });
               }
             }}
           >
             Save key
           </Button>
         </div>
-        {data?.hasByokKey && (
+        {data?.usesOwnKey && (
           <Button
             variant="ghost"
             className="mt-[var(--spacing-12)]"
             onClick={async () => {
-              await fetch(`/api/billing/byok?owner=${address}`, { method: "DELETE" });
-              void queryClient.invalidateQueries({ queryKey: ["quota", address] });
+              await fetch("/api/billing/byok", { method: "DELETE" });
+              void queryClient.invalidateQueries({ queryKey: ["balance", address] });
             }}
           >
             Remove key
