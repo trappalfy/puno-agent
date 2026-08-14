@@ -25,6 +25,7 @@ import {
   getPositionsWithEntryPrices,
   getLatestSignalContext,
   getLastL1CallTime,
+  getRecentDecisions,
 } from "../db/queries.js";
 import {
   checkBalanceBeforeCall,
@@ -37,7 +38,7 @@ import {
 import { screen } from "../llm/screen.js";
 import { decide, DECIDE_MODEL } from "../llm/decide.js";
 import { replayWithHaiku } from "../compare/replay.js";
-import type { DecisionContext } from "../llm/context.js";
+import { formatRecentDecisions, type DecisionContext } from "../llm/context.js";
 import { config } from "../config.js";
 
 const MIN_FREED_QUOTE_USD = 50;
@@ -322,7 +323,7 @@ export async function runTick(agentId: string): Promise<void> {
       valueUsd: usd1e18ToNumber(p.valueUsd1e18),
       entryPriceUsd: entryPricesUsd.get(p.token.toLowerCase()) ?? null,
     })),
-    recentDecisionsSummary: "",
+    recentDecisionsSummary: formatRecentDecisions(await getRecentDecisions(agentId)),
   };
 
   const budgetCheckL1 = await checkBalanceBeforeCall(

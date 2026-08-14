@@ -258,11 +258,17 @@ generation.
 ~~3. Set a manual PUNO/USD rate~~ **Done 2026-08-14** — $0.01, a testnet placeholder for the
    mock token. The mainnet rate is a real business decision, not a config value to copy.
 
-1. **`ANTHROPIC_API_KEY` is still empty in `.env`.** It blocks everything below.
-2. **Finish the end-to-end scenario.** The billing half is proven on chain (deposit →
-   indexer → credit → ledger invariant → idempotent replay; see `READINESS-2026-08-14.md`).
-   What remains is the model path: agent runs with `DRY_RUN=false` to a real trade, and all
-   three charges (screen, decision, trade) verified against the ledger.
+~~4. End-to-end scenario~~ **Done 2026-08-14.** Deposit → indexer → credit → ledger invariant
+   → idempotent replay, then agent → screen → decision → risk → simulate → **real on-chain
+   trade** (`0x082d0f73…`), with all three charges verified. See `READINESS-2026-08-14.md`.
+~~5. Margin check~~ **Done 2026-08-14 — measured, not assumed.** Our cost $0.057007 against
+   $1.30 charged: **95.6% margin**. A decision costs $0.0245 on the first call and **$0.0097**
+   once its prompt is cached, against $0.50 billed — the assumption is conservative by ~50×,
+   and `max_tokens: 4096` caps the worst case at $0.102. Full table in the readiness file.
+
+1. **Re-measure the screen cost.** D1's fix adds the decision summary to the screen prompt
+   (~2,885 tokens before). If it now crosses Haiku's 4,096-token cache minimum, caching
+   engages and open work item 7 solves itself — otherwise item 7 stands.
 5. **Margin check**: `SUM(modelCalls.costUsd)` vs charges for the same period, per level.
    This is the first real test of the $0.50 decision assumption.
 6. **Fuzz tests on `AgentVault` arithmetic** — never written.

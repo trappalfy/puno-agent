@@ -63,6 +63,53 @@ export async function getLatestSignalContext(agentId: string): Promise<LatestSig
   return { createdAt: row.createdAt, pricesByToken };
 }
 
+export interface RecentDecision {
+  action: string;
+  ticker: string;
+  sizePct: string;
+  confidence: string;
+  thesis: string;
+  riskVerdict: string;
+  /// Status of the trade this decision produced, or null when it never
+  /// reached one (risk rejected it, or the model chose to hold). Carrying it
+  /// is the whole point: "decided to buy and it filled" and "decided to buy
+  /// and nothing happened" are different situations for the next decision,
+  /// and the screening prompt cannot tell them apart from the action alone.
+  tradeStatus: string | null;
+  createdAt: Date;
+}
+
+/// The agent's own recent decisions, newest first — what `DecisionContext`
+/// exposes to both models as `recentDecisionsSummary`.
+///
+/// Without this the screening prompt is structurally unable to escalate on a
+/// vault holding nothing: it is told not to escalate for "a token the vault
+/// holds zero of and has no stated interest in", and stated interest can only
+/// come from here. An agent whose first decision never filled would otherwise
+/// go permanently silent.
+export async function getRecentDecisions(
+  agentId: string,
+  limit = 3,
+): Promise<RecentDecision[]> {
+  const rows = await db
+    .select({
+      action: schema.decisions.action,
+      ticker: schema.decisions.ticker,
+      sizePct: schema.decisions.sizePct,
+      confidence: schema.decisions.confidence,
+      thesis: schema.decisions.thesis,
+      riskVerdict: schema.decisions.riskVerdict,
+      tradeStatus: schema.trades.status,
+      createdAt: schema.decisions.createdAt,
+    })
+    .from(schema.decisions)
+    .leftJoin(schema.trades, eq(schema.trades.decisionId, schema.decisions.id))
+    .where(eq(schema.decisions.agentId, agentId))
+    .orderBy(desc(schema.decisions.createdAt))
+    .limit(limit);
+  return rows;
+}
+
 export async function getLastL1CallTime(agentId: string): Promise<Date | null> {
   const [row] = await db
     .select({ createdAt: schema.modelCalls.createdAt })

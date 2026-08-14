@@ -84,7 +84,35 @@ override with no liquidity behind it. Nothing to fix in code — it is a sequenc
 
 ## Defects worth fixing regardless of network
 
-### D1 — The agent has no memory of its own decisions
+### D1 — The agent has no memory of its own decisions — **was a blocker, now FIXED**
+
+> **Reclassified after execution.** This was filed below as a quality defect. Running the agent
+> proved it is worse than that: it is a permanent deadlock, and it stopped the end-to-end
+> scenario dead. Fixed the same day — the original write-up follows for the record.
+>
+> The screening prompt is told it will receive "a short summary of the agent's most recent
+> decisions", and is instructed **not** to escalate on "a token the vault currently holds zero
+> of and has no stated interest in". Stated interest can only come from
+> `recentDecisionsSummary` — so with that field permanently empty, **an agent holding nothing
+> can never escalate on any price move, ever.**
+>
+> This is reachable in production, not just in testing: if the first decision is rejected by
+> the risk engine, or its trade reverts, the vault holds nothing, the agent has no memory, and
+> it goes silent forever.
+>
+> Observed directly: three consecutive triggers (`price_moved:AAPL:8.00%`,
+> `quote_freed:$800.00`, `price_moved:AAPL:21.50%`) all declined, each citing the missing
+> history — *"you hold no AAPL position and have no stated thesis on it"*. After the fix the
+> very next trigger escalated, citing the restored memory: *"AAPL moved 7.69% right after you
+> decided to buy it in dry-run mode 16 minutes ago"*.
+>
+> **Fix:** `getRecentDecisions()` in `db/queries.ts` (left-joined to `trades` so the summary
+> carries whether the decision actually filled) and `formatRecentDecisions()` in
+> `llm/context.ts`, wired into `tick.ts`. Carrying the fill status matters as much as the
+> decision itself — "decided to buy and it filled" and "decided to buy and nothing happened"
+> are different situations, and only the second leaves an open thread worth escalating on.
+
+**Original write-up (2026-08-14, before execution):**
 
 `apps/agent/src/loop/tick.ts:325` hardcodes:
 
@@ -168,8 +196,59 @@ item 4 that needs no Anthropic key:
   the watcher re-run. Second pass reported `credited: 0`, balance stayed $10.00, ledger
   stayed at two rows. The `depositNonce` key does what CLAUDE.md claims.
 
-Still unproven, blocked only on `ANTHROPIC_API_KEY`: the L1/L2 model path, the screen and
-decision charges, and therefore the margin measurement (open work item 5).
+### The model path and the first margin measurement — **both closed**
+
+Open work items 4 and 5 are done. The agent ran against the live testnet with real Anthropic
+calls and `DRY_RUN=false`, and **executed a real trade on chain**:
+`0x082d0f731202cdc23e073089e0d821b3fa21d2b1c5a2dd53b9936905f2840952` — 180 USDG in,
+0.857142857 AAPL out at $210. On-chain balances, the `trades` row, and the recorded entry
+price all agree.
+
+All three charge types landed in the ledger: `screen` ×5 at $0.01, `decision` ×2 at $0.50,
+`trade` ×1 at $0.25.
+
+**Measured cost against what the user was charged:**
+
+| Level | Model | Calls | Our cost | Charged | Margin |
+|---|---|---:|---:|---:|---:|
+| L1 `screen` | Haiku 4.5 | 5 | $0.016026 | $0.05 | 67.9% |
+| L2 `decision` | Opus 5 | 2 | $0.038162 | $1.00 | **96.2%** |
+| L2 `comparison` | Haiku 4.5 | 1 | $0.002819 | — | our cost, never billed |
+| `trade` (gas) | — | 1 | ~$0.005 | $0.25 | ~98% |
+| **Total** | | | **$0.057007** | **$1.30** | **95.6%** |
+
+Per-call detail, first decision vs. cached: input 584 / output 240 / cache **write** 1,555 =
+$0.024470; the same call with a cache **read** instead prices at **$0.0097**. The prompt-cache
+minimum on Opus 5 is 512 tokens and the decision system prompt is ~880, so caching engages
+from the second call onward.
+
+**The $0.50 decision price is conservative by roughly 50×.** `max_tokens: 4096` also caps the
+worst case at $0.102, so no decision can ever cost more than a fifth of what it bills. The
+scenario where each additional user deepens a loss is not reachable at the model layer.
+
+Two of this file's own claims confirmed by measurement:
+
+- **Haiku caching never engages** — `cache_creation` and `cache_read` were 0 across all five
+  screen calls. The screen prompt renders at ~2,885 tokens against Haiku's 4,096 minimum.
+  (Note: D1's fix adds the decision summary to that prompt, pushing it toward the threshold —
+  crossing 4,096 would make screen caching engage and cut its cost. Worth measuring.)
+- **Gas is cheaper than assumed** — one trade cost 0.0000026 ETH. `pricing.ts` estimates
+  "~$0.02 of gas we pay from the agent wallet"; at ~$1,840/ETH the real figure is ~$0.005.
+
+Caveats, stated plainly: this is a handful of samples on a three-token mock portfolio with a
+single position. Real context will be larger — more holdings, more prices, a longer decision
+history — so input tokens will grow. Output was only 240 tokens including adaptive thinking at
+`effort: medium`; harder decisions will think longer. The structural ceiling does not move.
+
+### D5 — The comparison replay drops results on a schema violation
+
+`replayWithHaiku` failed on the first tick with
+`riskFlags.2: Too big: expected string to have <=64 characters` — Haiku wrote a risk flag
+longer than the Zod schema allows, and the whole replay was discarded. It is caught and
+logged (`tick.ts`), so nothing breaks, but the comparison measurement is the replay's entire
+purpose: it fails silently and unevenly, precisely on the verbose outputs most worth
+comparing. A second replay later succeeded, so this is intermittent, which makes the sampling
+bias worse rather than better.
 
 ---
 
