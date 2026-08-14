@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
-import { fetchJson, retryUnlessUnauthorized } from "./fetchJson";
+import { fetchJson, retryUnlessDenied } from "./fetchJson";
 
 export interface AgentDetail {
   agent: {
@@ -79,6 +79,6 @@ export function useAgentDetail(agentId: string) {
     // ignores anything the caller claims. Passing it suggested otherwise.
     queryFn: () => fetchJson<AgentDetail>(`/api/agents/${agentId}`),
     enabled: isConnected && !!address && !!agentId,
-    retry: retryUnlessUnauthorized,
+    retry: retryUnlessDenied,
   });
 }

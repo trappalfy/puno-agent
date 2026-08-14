@@ -19,6 +19,12 @@ export async function GET() {
       name: schema.agents.name,
       status: schema.agents.status,
       dryRun: schema.agents.dryRun,
+      // Sent so the dashboard can tell the two apart. A trial agent sits on the
+      // *shared* demo vault, which the account does not own — without this the
+      // client cannot know that its vault numbers are not the user's money and
+      // that /app/agents/[id] will refuse it (that route authorizes by vault
+      // ownership, correctly).
+      kind: schema.agents.kind,
       agentAddress: schema.agents.agentAddress,
       lastTickAt: schema.agents.lastTickAt,
       lastActionAt: schema.agents.lastActionAt,

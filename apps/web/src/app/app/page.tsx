@@ -5,6 +5,7 @@ import { AgentCard } from "@/components/terminal/AgentCard";
 import { MetricTile } from "@/components/ui/MetricTile";
 import { PnlValue } from "@/components/ui/PnlValue";
 import { ButtonLink } from "@/components/ui/ButtonLink";
+import { Card } from "@/components/ui/Card";
 import { WalletGate } from "@/components/WalletGate";
 
 /// The gate covers "connected" and "signed in" separately. Checking only the
@@ -36,13 +37,23 @@ function Dashboard() {
   }
 
   if (isError || !data) {
-    return <p className="text-app-body text-signal-red">Couldn't load your agents. Try again.</p>;
+    return (
+      <p className="text-app-body text-signal-red">Couldn&apos;t load your agents. Try again.</p>
+    );
   }
 
-  const totalNav = data.agents.reduce((sum, a) => sum + a.navUsd, 0);
-  const totalPnl = data.agents.reduce((sum, a) => sum + a.pnlUsd, 0);
+  // The trial agent runs on the *shared* demo vault. Folding it into these
+  // totals told a user who had done nothing but press the free-run button that
+  // they held a NAV and a P&L — someone else's, on a vault they cannot
+  // withdraw from. A portfolio total has to mean the money that is actually
+  // theirs, so the split happens before any arithmetic.
+  const live = data.agents.filter((a) => a.kind !== "trial");
+  const trials = data.agents.filter((a) => a.kind === "trial");
 
-  if (data.agents.length === 0) {
+  const totalNav = live.reduce((sum, a) => sum + a.navUsd, 0);
+  const totalPnl = live.reduce((sum, a) => sum + a.pnlUsd, 0);
+
+  if (live.length === 0 && trials.length === 0) {
     // The free run leads, and creating a vault is the secondary action.
     // Sending someone who has never seen the agent work straight into four
     // signed transactions and a funding step asks them to pay in effort before
@@ -67,23 +78,53 @@ function Dashboard() {
 
   return (
     <div className="flex flex-col gap-[var(--layout-section-gap)]">
-      <div className="grid grid-cols-1 gap-[var(--layout-element-gap)] md:grid-cols-3">
-        <MetricTile
-          label="Total NAV"
-          value={`$${totalNav.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        />
-        <MetricTile label="Unrealized P&L" value={<PnlValue usd={totalPnl} size="num-lg" />} />
-        <MetricTile label="Agents" value={String(data.agents.length)} />
-      </div>
+      {live.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 gap-[var(--layout-element-gap)] md:grid-cols-3">
+            <MetricTile
+              label="Total NAV"
+              value={`$${totalNav.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            />
+            <MetricTile label="Unrealized P&L" value={<PnlValue usd={totalPnl} size="num-lg" />} />
+            <MetricTile label="Agents" value={String(live.length)} />
+          </div>
 
-      <div>
-        <h2 className="text-app-heading-sm font-denim-ink font-semibold text-white">Agents</h2>
-        <div className="mt-[var(--layout-element-gap)] grid grid-cols-1 gap-[var(--layout-element-gap)] md:grid-cols-2 xl:grid-cols-3">
-          {data.agents.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} />
-          ))}
+          <div>
+            <h2 className="text-app-heading-sm font-denim-ink font-semibold text-white">Agents</h2>
+            <div className="mt-[var(--layout-element-gap)] grid grid-cols-1 gap-[var(--layout-element-gap)] md:grid-cols-2 xl:grid-cols-3">
+              {live.map((agent) => (
+                <AgentCard key={agent.id} agent={agent} />
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {trials.length > 0 && (
+        <div>
+          <h2 className="text-app-heading-sm font-denim-ink font-semibold text-white">Free run</h2>
+          <div className="mt-[var(--layout-element-gap)] grid grid-cols-1 gap-[var(--layout-element-gap)] md:grid-cols-2 xl:grid-cols-3">
+            {trials.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {live.length === 0 && (
+        <Card>
+          <h2 className="text-app-heading-sm font-denim-ink font-semibold text-white">
+            Nothing of yours is trading yet
+          </h2>
+          <p className="mt-[var(--spacing-8)] max-w-xl text-app-body text-white-muted">
+            The run above happened on our demo vault. Create your own and the agent works on real
+            prices, inside limits you set on-chain, with only your wallet able to withdraw.
+          </p>
+          <div className="mt-[var(--spacing-24)]">
+            <ButtonLink href="/app/agents/new">Create an agent</ButtonLink>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

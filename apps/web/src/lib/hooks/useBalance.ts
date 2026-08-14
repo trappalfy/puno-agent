@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
-import { fetchJson, retryUnlessUnauthorized } from "./fetchJson";
+import { fetchJson, retryUnlessDenied } from "./fetchJson";
 
 export type BillableEventKey = "screen" | "decision" | "trade";
 
@@ -41,7 +41,7 @@ export function useBalance() {
     queryKey: ["balance", address],
     queryFn: () => fetchJson<BalanceResponse>("/api/billing/balance"),
     enabled: isConnected && !!address,
-    retry: retryUnlessUnauthorized,
+    retry: retryUnlessDenied,
     // Deposits are credited by an out-of-process watcher, so the page has no
     // event to react to — polling is what makes a top-up appear without a
     // manual refresh.
