@@ -102,11 +102,18 @@ export function ConnectWalletButton({
 
   // No wallet in the browser. Nothing this button could do would help, so it
   // stops pretending to be one and points at the fix instead.
+  //
+  // The link is a vendor-neutral directory rather than one wallet's download
+  // page. `injected()` works with any EIP-1193 extension — Rabby, Frame, Brave,
+  // Coinbase Wallet and others all connect exactly the same way — so sending
+  // everyone to a single vendor would be steering users toward one company for
+  // no technical reason, and would contradict the label right above it. The
+  // named examples stay in the prose, where they inform without directing.
   if (hasWallet === false) {
     return (
       <div className="flex flex-col items-start gap-[var(--spacing-8)]">
         <a
-          href="https://metamask.io/download/"
+          href="https://ethereum.org/en/wallets/find-wallet/"
           target="_blank"
           rel="noreferrer noopener"
           className="text-app-body-sm text-lime-phosphor underline underline-offset-4 hover:opacity-80"
@@ -114,8 +121,8 @@ export function ConnectWalletButton({
           Install a browser wallet
         </a>
         <p className="text-app-body-sm text-white-muted">
-          Puno signs in with an Ethereum wallet extension such as MetaMask or Rabby. Once one is
-          installed, reload this page.
+          Puno signs in with any Ethereum wallet extension — MetaMask, Rabby and Frame all work.
+          Install one, then reload this page.
         </p>
       </div>
     );
