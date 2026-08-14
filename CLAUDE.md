@@ -373,6 +373,12 @@ on our good faith until liquidity exists.
 
 ## Commands
 
+**Never run `next build` for `apps/web` while its dev server is up.** Both write to the same
+`.next`, and the build wipes the chunks dev is serving. The symptom is not an error: pages keep
+returning 200 while `/_next/static/css/...` and the JS chunks 404, so the app renders as unstyled
+HTML with nothing interactive — every button looks broken. Stop dev, build, then restart dev, or
+delete `apps/web/.next` to recover. Hit on 2026-08-14 and misread at first as a CSS bug.
+
 ```bash
 pnpm -r typecheck && pnpm lint && pnpm test    # full regression
 forge test -vv                                  # contracts (run from contracts/)
