@@ -35,13 +35,28 @@ const variants: Record<Variant, string> = {
     "border border-signal-red text-signal-red hover:bg-signal-red hover:text-vault-floor",
 };
 
+/**
+ * Exported so a link that should *look* like a button can borrow the styling
+ * instead of wrapping one. `<Link><Button/></Link>` nests a <button> inside an
+ * <a>, which is invalid and hands screen readers two overlapping controls —
+ * see Sidebar.tsx, which hit this first. ButtonLink is the fixed form; this is
+ * what keeps the two from drifting apart.
+ */
+export function buttonClasses(
+  variant: Variant = "primary",
+  shape: Shape = "default",
+  className = "",
+): string {
+  return `${base} ${shapes[shape]} ${variants[variant]} ${className}`;
+}
+
 export function Button({
   variant = "primary",
   shape = "default",
   className = "",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; shape?: Shape }) {
-  return (
-    <button className={`${base} ${shapes[shape]} ${variants[variant]} ${className}`} {...props} />
-  );
+  return <button className={buttonClasses(variant, shape, className)} {...props} />;
 }
+
+export type { Variant as ButtonVariant, Shape as ButtonShape };

@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useAccount } from "wagmi";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { AgentCard } from "@/components/terminal/AgentCard";
 import { MetricTile } from "@/components/ui/MetricTile";
 import { PnlValue } from "@/components/ui/PnlValue";
-import { Button } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 
 export default function DashboardPage() {
@@ -49,17 +48,24 @@ export default function DashboardPage() {
   const totalPnl = data.agents.reduce((sum, a) => sum + a.pnlUsd, 0);
 
   if (data.agents.length === 0) {
+    // The free run leads, and creating a vault is the secondary action.
+    // Sending someone who has never seen the agent work straight into four
+    // signed transactions and a funding step asks them to pay in effort before
+    // they have any reason to.
     return (
       <div className="flex h-full flex-col items-center justify-center gap-[var(--spacing-16)] py-[var(--spacing-80)] text-center">
         <span className="h-2 w-2 rounded-full bg-lime-phosphor" aria-hidden />
         <h1 className="text-app-heading font-denim-ink font-semibold text-white">No agents yet</h1>
         <p className="max-w-sm text-app-body text-white-muted">
-          Create a vault, set your limits, and arm an agent — testnet only until you decide
-          otherwise.
+          Watch the agent make one real decision first — free, on testnet, with nothing to deploy.
+          Then create a vault of your own and set its limits.
         </p>
-        <Link href="/app/agents/new">
-          <Button variant="primary">Create an agent</Button>
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-[var(--spacing-12)]">
+          <ButtonLink href="/app/try">Try the agent free</ButtonLink>
+          <ButtonLink href="/app/agents/new" variant="ghost">
+            Create an agent
+          </ButtonLink>
+        </div>
       </div>
     );
   }

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { getNetwork } from "@puno/shared";
 import { ConnectWalletButton } from "../ConnectWalletButton";
 import { NetworkBadge } from "../ui/NetworkBadge";
+import { ButtonLink } from "../ui/ButtonLink";
 import { BalanceMeter } from "./BalanceMeter";
 
 const network = getNetwork("testnet"); // testnet-only until a separate mainnet decision
@@ -19,6 +20,11 @@ const NAV = [
     href: "/app",
     label: "Agents",
     isActive: (p: string) => p === "/app" || p.startsWith("/app/agents"),
+  },
+  {
+    href: "/app/try",
+    label: "Try the agent",
+    isActive: (p: string) => p.startsWith("/app/try"),
   },
   {
     href: "/app/settings",
@@ -75,14 +81,12 @@ export function Sidebar() {
       </nav>
 
       {/* A Link wrapping a Button nested a <button> inside an <a>, which is
-          invalid and gives screen readers two overlapping controls. The link
-          carries the button's styling instead. */}
-      <Link
-        href="/app/agents/new"
-        className="mt-[var(--spacing-16)] inline-flex items-center justify-center gap-[var(--spacing-8)] rounded-[var(--radius-buttons)] bg-lime-phosphor px-[var(--button-padding-x)] py-[var(--button-padding-y)] text-body-sm font-denim-ink font-semibold text-vault-floor transition-opacity hover:opacity-90"
-      >
+          invalid and gives screen readers two overlapping controls. ButtonLink
+          borrows the button's class builder instead of re-stating the classes
+          here, which is what this had to do before it existed. */}
+      <ButtonLink href="/app/agents/new" className="mt-[var(--spacing-16)]">
         New agent
-      </Link>
+      </ButtonLink>
 
       <div className="mt-auto flex flex-col gap-[var(--spacing-12)] pt-[var(--spacing-24)]">
         <BalanceMeter />

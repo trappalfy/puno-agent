@@ -35,8 +35,10 @@ export function Hero() {
         transition={{ delay: 0.7, duration: 0.7 }}
         className="mt-8 flex flex-col items-center gap-3"
       >
-        <CtaButton href={links.createAgent} label="Create an agent" />
-        <span className="text-xs text-white/40">Testnet live on Robinhood Chain · 46630</span>
+        <CtaButton href={links.tryAgent} label="Watch it make one decision" />
+        <span className="text-xs text-white/40">
+          Free, no vault to deploy · Testnet live on Robinhood Chain · 46630
+        </span>
       </motion.div>
 
       {/* Nothing is visible below the fold now, so without a cue a full-bleed

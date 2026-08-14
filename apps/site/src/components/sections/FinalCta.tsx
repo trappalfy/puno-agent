@@ -27,12 +27,12 @@ export function FinalCta() {
             not promises.
           </h2>
           <p className="mt-6 text-white/60 max-w-md mx-auto text-sm leading-[1.6]">
-            Deploy a vault, set the limits yourself, and let an agent propose trades within them.
-            Testnet is open now — bring a wallet, not real funds.
+            See it read a real portfolio, argue a position and check itself against on-chain
+            limits — one decision, free, nothing deployed. Then set your own limits and let it run.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <CtaButton href={links.createAgent} label="Create an agent" />
-            <CtaButton href={links.pricing} label="See pricing" variant="outline" />
+            <CtaButton href={links.tryAgent} label="Watch it make one decision" />
+            <CtaButton href={links.createAgent} label="Create an agent" variant="outline" />
           </div>
         </div>
       </motion.div>
