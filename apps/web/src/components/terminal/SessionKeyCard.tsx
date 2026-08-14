@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { agentVaultAbi } from "@puno/shared";
 import type { Address } from "viem";
-import { Card } from "../ui/Card";
+import { Disclosure } from "../ui/Disclosure";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { AddressChip } from "../ui/AddressChip";
@@ -59,10 +59,14 @@ export function SessionKeyCard({
   const isOwner = !!address && !!owner && address.toLowerCase() === owner.toLowerCase();
   const revoked = onChainAgent && onChainAgent === "0x0000000000000000000000000000000000000000";
 
+  // The countdown is the whole point of this card, so it *is* the summary —
+  // an expiring key is something a person should learn without opening
+  // anything, and the address and revoke action can wait until they do.
+  const expirySummary = revoked ? "revoked" : expiry !== undefined ? formatCountdown(expiry) : "…";
+
   return (
-    <Card>
-      <h3 className="text-app-heading-sm font-denim-ink font-semibold text-white">Session key</h3>
-      <div className="mt-[var(--spacing-16)] flex flex-col gap-[var(--spacing-8)]">
+    <Disclosure title="Session key" summary={expirySummary}>
+      <div className="flex flex-col gap-[var(--spacing-8)]">
         <div className="flex items-center justify-between">
           <span className="text-app-body-sm text-white-muted">Agent address</span>
           <AddressChip address={agentAddress} explorerBaseUrl={explorerBaseUrl} />
@@ -104,6 +108,6 @@ export function SessionKeyCard({
           );
         }}
       />
-    </Card>
+    </Disclosure>
   );
 }

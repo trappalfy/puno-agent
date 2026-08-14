@@ -6,13 +6,19 @@ import { agentVaultAbi } from "@puno/shared";
 import type { Address } from "viem";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
-import { Card } from "../ui/Card";
 
 /// DESIGN.md #21 — the one place red is a large element. Reads `paused()`
 /// live (never trusts a cached DB value for this) and calls the vault's own
 /// `pause`/`unpause` directly — the same functions the plan's safety story
 /// rests on (2.5 #4: "kill switch останавливает и контракт... и воркер").
 /// Owner-only on-chain, so this renders nothing for anyone else.
+///
+/// Renders inline in the page header rather than as a card in the body, and
+/// it is the one thing on this page that is deliberately *not* collapsed. The
+/// density pass folded everything else away; a stop control behind a
+/// disclosure triangle would be a worse product than a cluttered one. The
+/// explanation this used to carry as body prose now lives in the confirmation
+/// dialog, which is where someone actually needs to read it.
 export function KillSwitch({ vaultAddress }: { vaultAddress: Address }) {
   const { address } = useAccount();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -39,18 +45,18 @@ export function KillSwitch({ vaultAddress }: { vaultAddress: Address }) {
   const isPaused = paused === true;
 
   return (
-    <Card className="border border-signal-red/40">
-      <h3 className="text-app-heading-sm font-denim-ink font-semibold text-white">Kill switch</h3>
-      <p className="mt-[var(--spacing-8)] text-app-body-sm text-white-muted">
-        {isPaused
-          ? "Trading is paused on-chain. The agent cannot call executeTrade until you resume."
-          : "Immediately blocks executeTrade on this vault, on-chain — independent of whether the worker is running."}
-      </p>
-      <div className="mt-[var(--spacing-16)]">
-        <Button variant={isPaused ? "primary" : "danger"} onClick={() => setConfirmOpen(true)}>
-          {isPaused ? "Resume trading" : "Pause trading"}
-        </Button>
-      </div>
+    <div className="flex items-center gap-[var(--spacing-12)]">
+      {/* Paused is a state someone must not be able to miss, and DESIGN.md's
+          accessibility rule forbids leaving it to colour — so it is a labelled
+          chip, not a red tint on the button. */}
+      {isPaused && (
+        <span className="rounded-[var(--radius-tags)] border border-signal-red px-[var(--spacing-12)] py-[var(--spacing-4)] text-num-sm text-signal-red font-jetbrains-mono">
+          Paused on-chain
+        </span>
+      )}
+      <Button variant={isPaused ? "primary" : "danger"} onClick={() => setConfirmOpen(true)}>
+        {isPaused ? "Resume trading" : "Pause trading"}
+      </Button>
 
       <ConfirmDialog
         open={confirmOpen}
@@ -80,6 +86,6 @@ export function KillSwitch({ vaultAddress }: { vaultAddress: Address }) {
           );
         }}
       />
-    </Card>
+    </div>
   );
 }

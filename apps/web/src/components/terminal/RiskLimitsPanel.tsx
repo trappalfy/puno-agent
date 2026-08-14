@@ -4,7 +4,7 @@ import { useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
 import type { Address } from "viem";
 import { agentVaultAbi } from "@puno/shared";
-import { Card } from "../ui/Card";
+import { Disclosure } from "../ui/Disclosure";
 import type { AgentDetail } from "@/lib/hooks/useAgentDetail";
 
 function usd(value: bigint | undefined): string {
@@ -20,6 +20,13 @@ function bps(value: bigint | number | undefined): string {
 /// DESIGN.md #19 — every limit explicitly marked as on-chain-enforced or
 /// off-chain-only, since risk.ts / AgentVault.sol only enforce half of them
 /// (see packages/shared/src/db/schema.ts's comment on the `limits` table).
+///
+/// Ten rows is the right amount of detail and the wrong amount of *first
+/// impression*, so the panel now collapses behind a summary that answers the
+/// only question most visits have — is a cap in force, and how big is it.
+/// The distinction the rule exists to protect is in that summary too: it
+/// counts the on-chain limits specifically, never a combined total that would
+/// let five worker-side settings read as contract-enforced.
 export function RiskLimitsPanel({
   vaultAddress,
   offChainLimits,
@@ -40,11 +47,19 @@ export function RiskLimitsPanel({
 
   const [maxNotional, maxDaily, maxPositionBps, minSeconds, maxSlippageBps] = data ?? [];
 
-  return (
-    <Card>
-      <h3 className="text-app-heading-sm font-denim-ink font-semibold text-white">Risk limits</h3>
+  // Counts what actually read back, not how many rows this renders — a feed
+  // that failed to load must not be summarised as an enforced limit.
+  const onChainCount = [maxNotional, maxDaily, maxPositionBps, minSeconds, maxSlippageBps].filter(
+    (r) => r?.status === "success",
+  ).length;
+  const perTrade = usd(maxNotional?.result as bigint | undefined);
 
-      <div className="mt-[var(--spacing-16)]">
+  return (
+    <Disclosure
+      title="Risk limits"
+      summary={data ? `${onChainCount} on-chain · max ${perTrade}/trade` : "…"}
+    >
+      <div>
         <div className="text-num-xs uppercase text-lime-phosphor font-jetbrains-mono">
           On-chain — enforced by the vault contract
         </div>
@@ -97,7 +112,7 @@ export function RiskLimitsPanel({
           />
         </dl>
       </div>
-    </Card>
+    </Disclosure>
   );
 }
 

@@ -3,6 +3,7 @@
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { ButtonLink } from "../ui/ButtonLink";
+import { Disclosure } from "../ui/Disclosure";
 import { TxStatusPill, type TradeStatus } from "../ui/TxStatusPill";
 import { useStartTrial, useTrial, type TrialStatus } from "@/lib/hooks/useTrial";
 
@@ -42,7 +43,9 @@ export function TrialConsole() {
     return <div className="h-64 animate-pulse rounded-[var(--radius-cards)] bg-vault-floor" />;
   }
   if (isError || !data) {
-    return <p className="text-app-body text-signal-red">Couldn&apos;t load the trial. Try again.</p>;
+    return (
+      <p className="text-app-body text-signal-red">Couldn&apos;t load the trial. Try again.</p>
+    );
   }
 
   const inFlight = data.run?.status === "pending" || data.run?.status === "running";
@@ -56,11 +59,12 @@ export function TrialConsole() {
             <h1 className="text-app-heading font-denim-ink font-semibold text-white">
               Watch the agent think
             </h1>
+            {/* One line, not five. The full explanation is still on the page —
+                it moved into the disclosure below, where someone who wants it
+                can reach it without it standing between everyone else and the
+                button. */}
             <p className="mt-[var(--spacing-8)] max-w-xl text-app-body text-white-muted">
-              One decision, free, on testnet. The agent reads a real portfolio at live prices,
-              screens it, forms a thesis, checks it against the vault&apos;s on-chain risk limits
-              and simulates the trade against the deployed contract. The only thing it does not do
-              is broadcast.
+              One decision, free, on testnet. Everything is real except the broadcast.
             </p>
           </div>
           {data.canRun && !inFlight && (
@@ -79,7 +83,26 @@ export function TrialConsole() {
         {!data.canRun && !inFlight && <BlockedNotice status={data} />}
       </Card>
 
-      {data.run && <StageList stage={stage} failed={data.run.status === "failed"} />}
+      <Disclosure title="What actually runs" summary="4 stages">
+        <p className="max-w-2xl text-app-body-sm text-white-muted">
+          The agent reads a real portfolio at live prices, screens it with Haiku, forms a thesis
+          with Opus, checks that thesis against the vault&apos;s on-chain risk limits, and simulates
+          the resulting swap against the deployed contract with a real{" "}
+          <span className="font-jetbrains-mono">eth_call</span>. The only step it skips is
+          broadcasting the transaction.
+        </p>
+      </Disclosure>
+
+      {data.run && (
+        <StageList
+          stage={stage}
+          failed={data.run.status === "failed"}
+          // Five rows are worth watching while they change and worth nothing
+          // once they have all turned lime. After the run they fold into a
+          // single line so the decision below is what the eye lands on.
+          collapsed={!inFlight && data.run.status === "done"}
+        />
+      )}
 
       {data.run?.status === "failed" && data.run.error && (
         <Card>
@@ -90,41 +113,76 @@ export function TrialConsole() {
         </Card>
       )}
 
-      {data.signal && <ScreeningCard signal={data.signal} />}
-      {data.decision && <DecisionCard decision={data.decision} trade={data.trade} />}
+      {/* Ordered so the conclusion outranks the working. While the screen is
+          all there is, it is the whole story and stays open; the moment a
+          decision exists it becomes the step *before* the answer, and the
+          answer should not have to be scrolled to. */}
+      {data.decision ? (
+        <>
+          <DecisionCard decision={data.decision} trade={data.trade} />
+          {data.signal && (
+            <Disclosure
+              title="Screening — Haiku"
+              summary={data.signal.escalate ? "escalated" : "not escalated"}
+            >
+              <ScreeningBody signal={data.signal} />
+            </Disclosure>
+          )}
+        </>
+      ) : (
+        data.signal && <ScreeningCard signal={data.signal} />
+      )}
 
       {data.decision && !inFlight && <Paywall />}
     </div>
   );
 }
 
-function StageList({ stage, failed }: { stage: number; failed: boolean }) {
+function StageList({
+  stage,
+  failed,
+  collapsed = false,
+}: {
+  stage: number;
+  failed: boolean;
+  collapsed?: boolean;
+}) {
+  const list = <StageRows stage={stage} failed={failed} />;
+  if (collapsed) {
+    return (
+      <Disclosure title="Run" summary={`done · ${STAGES.length - 1} stages`}>
+        {list}
+      </Disclosure>
+    );
+  }
+  return <Card>{list}</Card>;
+}
+
+function StageRows({ stage, failed }: { stage: number; failed: boolean }) {
   return (
-    <Card>
-      <ol className="flex flex-col gap-[var(--spacing-12)]">
-        {STAGES.map((s, i) => {
-          const done = i < stage;
-          const active = i === stage && !failed;
-          return (
-            <li key={s.key} className="flex items-center gap-[var(--spacing-12)]">
-              <span
-                className={`h-2 w-2 shrink-0 rounded-full ${
-                  done || active ? "bg-lime-phosphor" : "bg-moss-border"
-                } ${active ? "animate-pulse" : ""}`}
-                aria-hidden
-              />
-              <span
-                className={`text-num-sm font-jetbrains-mono ${
-                  done || active ? "text-white" : "text-white-faint"
-                }`}
-              >
-                {s.label}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </Card>
+    <ol className="flex flex-col gap-[var(--spacing-12)]">
+      {STAGES.map((s, i) => {
+        const done = i < stage;
+        const active = i === stage && !failed;
+        return (
+          <li key={s.key} className="flex items-center gap-[var(--spacing-12)]">
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${
+                done || active ? "bg-lime-phosphor" : "bg-moss-border"
+              } ${active ? "animate-pulse" : ""}`}
+              aria-hidden
+            />
+            <span
+              className={`text-num-sm font-jetbrains-mono ${
+                done || active ? "text-white" : "text-white-faint"
+              }`}
+            >
+              {s.label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -145,6 +203,16 @@ function ScreeningCard({ signal }: { signal: NonNullable<TrialStatus["signal"]> 
           {signal.escalate ? "escalated" : "not escalated"}
         </span>
       </div>
+      <ScreeningBody signal={signal} />
+    </Card>
+  );
+}
+
+/// Shared between the open card and the collapsed disclosure so the two can
+/// never disagree about what the screening step said.
+function ScreeningBody({ signal }: { signal: NonNullable<TrialStatus["signal"]> }) {
+  return (
+    <>
       <p className="mt-[var(--spacing-12)] text-app-body-sm text-white-muted">
         Trigger: {signal.triggerReasons.join(", ")}
       </p>
@@ -155,7 +223,7 @@ function ScreeningCard({ signal }: { signal: NonNullable<TrialStatus["signal"]> 
           one. Run it again when the market has moved.
         </p>
       )}
-    </Card>
+    </>
   );
 }
 
@@ -175,7 +243,9 @@ function DecisionCard({
         </span>
         <span
           className={`rounded-[var(--radius-tags)] border px-[var(--spacing-12)] py-[var(--spacing-4)] text-num-sm font-jetbrains-mono ${
-            accepted ? "border-lime-phosphor text-lime-phosphor" : "border-signal-red text-signal-red"
+            accepted
+              ? "border-lime-phosphor text-lime-phosphor"
+              : "border-signal-red text-signal-red"
           }`}
         >
           {accepted ? "risk accepted" : "risk rejected"}
@@ -250,8 +320,7 @@ function DecisionCard({
 
 function BlockedNotice({ status }: { status: TrialStatus }) {
   const copy: Record<string, string> = {
-    already_used:
-      "You have had your free decision. Top up to run an agent on a vault of your own.",
+    already_used: "You have had your free decision. Top up to run an agent on a vault of your own.",
     insufficient_credit:
       "Your balance no longer covers a decision. Top up to keep the agent working.",
     in_flight: "A run is already going. One at a time.",
@@ -272,9 +341,8 @@ function Paywall() {
       </h2>
       <p className="mt-[var(--spacing-8)] max-w-xl text-app-body text-white-muted">
         On a vault of your own the agent runs continuously, on real prices, inside limits you set
-        on-chain — and it executes rather than simulating. You keep custody throughout: the vault
-        is yours, the agent key can only trade within your policy, and only your wallet can
-        withdraw.
+        on-chain — and it executes rather than simulating. You keep custody throughout: the vault is
+        yours, the agent key can only trade within your policy, and only your wallet can withdraw.
       </p>
       <div className="mt-[var(--spacing-24)] flex flex-wrap gap-[var(--spacing-12)]">
         <ButtonLink href="/app/settings">Top up with PUNO</ButtonLink>
