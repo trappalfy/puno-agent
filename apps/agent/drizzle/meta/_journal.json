@@ -50,6 +50,13 @@
       "when": 1786627962364,
       "tag": "0006_credit_ledger_and_token_price",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786720262305,
+      "tag": "0007_worthless_lockheed",
+      "breakpoints": true
     }
   ]
 }

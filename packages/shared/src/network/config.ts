@@ -33,6 +33,19 @@ export interface NetworkConfig {
   // — every billing path checks for null and says so rather than half-working.
   punoToken: Address | null;
   punoCredits: Address | null;
+  // The vault the free tier runs against, read-only. A free run is a paper
+  // run — it reads this vault's real portfolio and prices, screens, decides,
+  // assesses risk and simulates against it, and never broadcasts. Sharing one
+  // vault is what removes the faucet, the four signatures and the testnet USDG
+  // from the path between "connected a wallet" and "watched the agent think".
+  //
+  // `agent` must equal the vault's on-chain `agent`, because guard() compares
+  // them before anything else runs. Nothing signs with it — a paper run has
+  // nothing to sign — so this is a public address and never a key.
+  //
+  // null means the network has no demo vault and the free tier is unavailable
+  // there, which is the correct state for mainnet: free runs belong on testnet.
+  demoVault: { address: Address; agent: Address } | null;
 }
 
 // Verified against https://docs.robinhood.com/chain/connecting (2026-08-11).
@@ -56,6 +69,10 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     vaultFactory: null,
     punoToken: null,
     punoCredits: null,
+    // Deliberately null. The free tier is a testnet demonstration; running it
+    // against a mainnet vault would spend real gas on simulations for people
+    // who have not paid for anything.
+    demoVault: null,
   },
   testnet: {
     key: "testnet",
@@ -89,6 +106,15 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     vaultFactory: "0x486901cBa710C5Fb1032AB1bB25d190E3f845998",
     punoToken: "0x1A480B089d8A5E2B77A1bD8908aBFF9bB6af21da",
     punoCredits: "0xD0D4B491D8980cd49b0eCf151ad30f8f779D74f6",
+    // The vault DeployTestnet stands up, funded and armed by hand on
+    // 2026-08-14 (the deploy script does not call setAgent — see CLAUDE.md).
+    // `agent` is read back from the chain and must stay equal to
+    // AgentVault.agent(); guard() rejects the run outright if it drifts, which
+    // is the failure mode we want rather than a silent no-op.
+    demoVault: {
+      address: "0xcFA434255f47F4C8777043540d253CEDFb36B5e9",
+      agent: "0x389AA9c066854a1e1A62a9F49910760a8D010adD",
+    },
   },
 };
 

@@ -1,13 +1,19 @@
+import { eq } from "drizzle-orm";
 import { schema } from "@puno/shared";
 import { db } from "./db/client.js";
 import { runTick } from "./loop/tick.js";
 import { runDepositWatcher } from "./billing/watcher.js";
+import { runTrialQueue } from "./trial/runner.js";
 import { config } from "./config.js";
 
 async function tickAllAgents(): Promise<void> {
+  // `kind = 'live'` only. Free-tier agents run once, on request, from the
+  // trial queue — ticking them here would bill someone for a decision they
+  // never asked for, on a timer, until their grant was gone.
   const agents = await db
     .select({ id: schema.agents.id, name: schema.agents.name })
-    .from(schema.agents);
+    .from(schema.agents)
+    .where(eq(schema.agents.kind, "live"));
   for (const agent of agents) {
     try {
       await runTick(agent.id);
@@ -31,6 +37,19 @@ async function pollDeposits(): Promise<void> {
     // Never fatal. An RPC hiccup must not take the worker down — the cursor
     // did not advance, so the next pass picks up exactly where this one left.
     console.error("[credits] deposit watcher pass failed:", err);
+  }
+}
+
+async function pollTrials(): Promise<void> {
+  try {
+    const result = await runTrialQueue();
+    if (result.ran > 0 || result.failed > 0) {
+      console.log(`[trial] pass complete: ${result.ran} run, ${result.failed} failed`);
+    }
+  } catch (err) {
+    // Same rule as the deposit watcher: never fatal. Unclaimed rows stay
+    // pending and the next pass picks them up.
+    console.error("[trial] queue pass failed:", err);
   }
 }
 
@@ -60,6 +79,13 @@ async function main(): Promise<void> {
   setInterval(() => {
     void pollDeposits();
   }, config.creditsPollIntervalMs);
+
+  // Its own interval too, and the fastest one: a free run has a person waiting
+  // on it, while the trading tick has nobody watching any given pass.
+  await pollTrials();
+  setInterval(() => {
+    void pollTrials();
+  }, config.trialPollIntervalMs);
 
   await tickAllAgents();
   setInterval(() => {

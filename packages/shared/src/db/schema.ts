@@ -25,6 +25,17 @@ export const agentStatusEnum = pgEnum("agent_status", [
   // charge", not "monthly quota used up".
   "quota_exhausted",
 ]);
+// What an agent is for. `trial` agents back the free tier: they point at the
+// shared demo vault, are always paper, and are deliberately NOT ticked by the
+// worker's interval loop — a free run happens once, when the user asks for it,
+// and must never bill them again on a timer.
+export const agentKindEnum = pgEnum("agent_kind", ["live", "trial"]);
+export const trialRunStatusEnum = pgEnum("trial_run_status", [
+  "pending",
+  "running",
+  "done",
+  "failed",
+]);
 export const networkEnum = pgEnum("network", ["mainnet", "testnet"]);
 export const modelLevelEnum = pgEnum("model_level", ["L1", "L2"]);
 export const modelCallPurposeEnum = pgEnum("model_call_purpose", ["decision", "comparison"]);
@@ -189,6 +200,10 @@ export const agents = pgTable("agents", {
   // on-chain `agent` for executeTrade calls to authorize. Never the private key.
   agentAddress: text("agent_address").notNull(),
   status: agentStatusEnum("status").notNull().default("idle"),
+  kind: agentKindEnum("kind").notNull().default("live"),
+  // Read by runTick — an agent marked here is never broadcast for, whatever the
+  // worker's process-wide DRY_RUN says. The console renders it as a "Dry run"
+  // badge, so this column is a promise to the owner, not a hint.
   dryRun: boolean("dry_run").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -219,6 +234,46 @@ export const limits = pgTable("limits", {
   maxCallsPerHour: integer("max_calls_per_hour").notNull().default(6),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// Free-tier trial queue
+//
+// The free run is executed by the worker, not by the web app, so that agent
+// logic lives in exactly one process forever. The web route inserts a row here
+// and polls it; the worker claims it, runs one paper tick, and writes the
+// outcome back. The latency this adds is not a cost worth engineering away —
+// an L2 decision takes seconds regardless, and a console that says
+// "screening… deciding…" is the thing the user came to watch.
+// ---------------------------------------------------------------------------
+
+export const trialRuns = pgTable(
+  "trial_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id),
+    status: trialRunStatusEnum("status").notNull().default("pending"),
+    // Why the run ended the way it did — an exhausted balance, a paused demo
+    // vault, an RPC failure. Shown to the user, so it has to read as an
+    // explanation rather than a stack trace.
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    // The worker's claim query orders by this; the partial index keeps that scan
+    // proportional to the backlog rather than to every trial ever run.
+    index("trial_runs_pending_idx")
+      .on(t.createdAt)
+      .where(sql`status = 'pending'`),
+    index("trial_runs_account_idx").on(t.accountId, t.createdAt),
+  ],
+);
 
 export const positions = pgTable(
   "positions",

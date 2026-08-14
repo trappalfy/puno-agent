@@ -48,6 +48,11 @@ const envSchema = z.object({
   // Deposits are money arriving, so this polls faster than the trading tick —
   // a user who just paid should not watch a spinner for a minute.
   CREDITS_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(10_000),
+  // The free-tier queue is the only path with someone actively waiting on it,
+  // so it polls fastest. The claim is a single indexed UPDATE against a table
+  // that is empty most of the time; two seconds of that costs nothing next to
+  // the impression that pressing the button did nothing.
+  TRIAL_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2_000),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -82,6 +87,7 @@ export const config = {
   comparisonSampleRate: env.COMPARISON_SAMPLE_RATE,
   creditsWatcherStartBlock: env.CREDITS_WATCHER_START_BLOCK,
   creditsPollIntervalMs: env.CREDITS_POLL_INTERVAL_MS,
+  trialPollIntervalMs: env.TRIAL_POLL_INTERVAL_MS,
 } as const;
 
 export type Config = typeof config;
