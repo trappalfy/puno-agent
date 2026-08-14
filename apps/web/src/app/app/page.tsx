@@ -1,31 +1,26 @@
 "use client";
 
-import { useAccount } from "wagmi";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { AgentCard } from "@/components/terminal/AgentCard";
 import { MetricTile } from "@/components/ui/MetricTile";
 import { PnlValue } from "@/components/ui/PnlValue";
 import { ButtonLink } from "@/components/ui/ButtonLink";
-import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+import { WalletGate } from "@/components/WalletGate";
 
+/// The gate covers "connected" and "signed in" separately. Checking only the
+/// first let a connected-but-unsigned visitor fall through to a fetch that
+/// answered 401 instantly, which then retried and surfaced as "Couldn't load
+/// your agents" — a wrong diagnosis delivered slowly.
 export default function DashboardPage() {
-  const { isConnected } = useAccount();
-  const { data, isLoading, isError } = useAgents();
+  return (
+    <WalletGate>
+      <Dashboard />
+    </WalletGate>
+  );
+}
 
-  if (!isConnected) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-[var(--spacing-16)] py-[var(--spacing-80)] text-center">
-        <span className="h-2 w-2 rounded-full bg-lime-phosphor" aria-hidden />
-        <h1 className="text-app-heading font-denim-ink font-semibold text-white">
-          Connect a wallet to see your agents
-        </h1>
-        <p className="max-w-sm text-app-body text-white-muted">
-          Every vault is scoped to its owner's wallet — connect to view or create one.
-        </p>
-        <ConnectWalletButton />
-      </div>
-    );
-  }
+function Dashboard() {
+  const { data, isLoading, isError } = useAgents();
 
   if (isLoading) {
     return (

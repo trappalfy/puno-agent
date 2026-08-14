@@ -5,27 +5,27 @@ import { useAccount } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+import { WalletGate } from "@/components/WalletGate";
 import { useBalance } from "@/lib/hooks/useBalance";
 
+/// Gated on the session, not just the connection. Every read on this page goes
+/// through /api/billing/balance, which answers 401 without one — the balance
+/// would simply have sat at "…" for a connected visitor who never signed in.
 export default function SettingsPage() {
-  const { address, isConnected } = useAccount();
+  return (
+    <WalletGate>
+      <Settings />
+    </WalletGate>
+  );
+}
+
+function Settings() {
+  const { address } = useAccount();
   const queryClient = useQueryClient();
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<string | null>(null);
 
   const { data } = useBalance();
-
-  if (!isConnected) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-[var(--spacing-16)] py-[var(--spacing-80)] text-center">
-        <h1 className="text-app-heading font-denim-ink font-semibold text-white">
-          Connect a wallet to see your settings
-        </h1>
-        <ConnectWalletButton />
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-xl">

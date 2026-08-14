@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
+import { fetchJson, retryUnlessUnauthorized } from "./fetchJson";
 
 export interface AgentListItem {
   id: string;
@@ -22,14 +23,12 @@ export function useAgents() {
 
   return useQuery({
     queryKey: ["agents", address],
-    queryFn: async (): Promise<{
-      account: { id: string; balanceUsd: number };
-      agents: AgentListItem[];
-    }> => {
-      const res = await fetch(`/api/agents?owner=${address}`);
-      if (!res.ok) throw new Error(`failed to load agents (${res.status})`);
-      return res.json();
-    },
+    queryFn: () =>
+      fetchJson<{
+        account: { id: string; balanceUsd: number };
+        agents: AgentListItem[];
+      }>("/api/agents"),
     enabled: isConnected && !!address,
+    retry: retryUnlessUnauthorized,
   });
 }

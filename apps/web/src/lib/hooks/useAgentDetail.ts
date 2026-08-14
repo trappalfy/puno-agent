@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
+import { fetchJson, retryUnlessUnauthorized } from "./fetchJson";
 
 export interface AgentDetail {
   agent: {
@@ -74,11 +75,10 @@ export function useAgentDetail(agentId: string) {
 
   return useQuery({
     queryKey: ["agent", agentId, address],
-    queryFn: async (): Promise<AgentDetail> => {
-      const res = await fetch(`/api/agents/${agentId}?owner=${address}`);
-      if (!res.ok) throw new Error(`failed to load agent (${res.status})`);
-      return res.json();
-    },
+    // No `owner` param: the route reads identity from the session cookie and
+    // ignores anything the caller claims. Passing it suggested otherwise.
+    queryFn: () => fetchJson<AgentDetail>(`/api/agents/${agentId}`),
     enabled: isConnected && !!address && !!agentId,
+    retry: retryUnlessUnauthorized,
   });
 }

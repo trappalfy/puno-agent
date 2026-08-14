@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
+import { fetchJson, retryUnlessUnauthorized } from "./fetchJson";
 
 export type BillableEventKey = "screen" | "decision" | "trade";
 
@@ -38,12 +39,9 @@ export function useBalance() {
 
   return useQuery({
     queryKey: ["balance", address],
-    queryFn: async (): Promise<BalanceResponse> => {
-      const res = await fetch("/api/billing/balance");
-      if (!res.ok) throw new Error(`failed to load balance (${res.status})`);
-      return res.json();
-    },
+    queryFn: () => fetchJson<BalanceResponse>("/api/billing/balance"),
     enabled: isConnected && !!address,
+    retry: retryUnlessUnauthorized,
     // Deposits are credited by an out-of-process watcher, so the page has no
     // event to react to — polling is what makes a top-up appear without a
     // manual refresh.

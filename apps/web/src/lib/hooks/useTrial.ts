@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
+import { fetchJson, retryUnlessUnauthorized } from "./fetchJson";
 
 export type TrialBlockedReason =
   | "no_demo_vault"
@@ -62,12 +63,9 @@ export function useTrial() {
 
   return useQuery({
     queryKey: ["trial", address],
-    queryFn: async (): Promise<TrialStatus> => {
-      const res = await fetch("/api/trial/status");
-      if (!res.ok) throw new Error(`failed to load trial status (${res.status})`);
-      return res.json();
-    },
+    queryFn: () => fetchJson<TrialStatus>("/api/trial/status"),
     enabled: isConnected && !!address,
+    retry: retryUnlessUnauthorized,
     refetchInterval: (query) => {
       const status = query.state.data?.run?.status;
       return status === "pending" || status === "running" ? IN_FLIGHT_POLL_MS : false;
