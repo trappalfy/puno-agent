@@ -57,6 +57,19 @@ merge them — the margin measurement depends on keeping them apart.
 
 ## Non-obvious decisions worth preserving
 
+**Robinhood Chain mainnet has everything the product assumed.** Surveyed by execution on
+2026-08-14 — see `PHASE4-ROUTING-2026-08-14.md` for addresses, liquidity and a live quote.
+Real tokenized equities (AAPL/TSLA/NVDA/… as "Apple • Robinhood Token"), USDG pools on a
+Uniswap V3 deployment, a verified 1inch AggregationRouterV6, and 111 Chainlink feed proxies
+covering ~35 tickers. B1 is an integration, not a dependency hunt. Two traps recorded there:
+**symbol lookup is not identity** (`loxAAPL`, `AAPLCAT`, two different `loxTSLA` contracts all
+exist), and periphery contracts must be resolved by `factory()`, never by name — Blockscout
+returns five `SwapRouter`s belonging to four different factories.
+
+**The public mainnet RPC is behind Cloudflare and rejects batched JSON-RPC POSTs** — a batch
+returns an HTML interstitial regardless of user agent, while `cast` passes one call at a time.
+Enumerate chain state sequentially. Blockscout's REST API is not challenged.
+
 **Per-feed price staleness.** `AgentVault.PriceFeed` carries its own `maxStaleness` (uint32,
 packed into the aggregator's slot), bounded by `MAX_STALENESS_LIMIT = 2 days`. A single
 global threshold cannot work: equity feeds republish on deviation (minutes), while pegged
@@ -64,7 +77,8 @@ stablecoins only publish on the 24h heartbeat. Measured live, USDG was 22h stale
 the old 1h threshold, so `_nav()` reverted on roughly 23 of every 24 hours.
 `MockAggregatorV3` stamps `block.timestamp`, so **no testnet run could ever have surfaced
 this** — it only appeared against real feeds. Deploy constants: `QUOTE_STALENESS = 26 hours`,
-`EQUITY_STALENESS = 1 hours`.
+`EQUITY_STALENESS = 1 hours`. **Re-confirmed live on 2026-08-14**: USDG/USD was 22.4 h stale
+while AAPL, TSLA and NVDA were 0–0.3 h. Both constants still hold; do not collapse them.
 
 **`PunoCredits` idempotency is `depositNonce`, not `txHash`.** One transaction can carry
 several deposits, so a txHash key would silently drop credits. The event also reports what
