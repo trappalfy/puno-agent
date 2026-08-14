@@ -32,7 +32,14 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   VAULT_ADDRESS: z.union([hexAddress, z.literal("")]).optional(),
   TICK_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
-  COMPARISON_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1),
+  // Fraction of L2 decisions that also get replayed through Haiku for the
+  // divergence measurement. The replay is our own measurement and is never
+  // billed (loop/tick.ts), so every one of them is cost with no revenue
+  // against it: measured at $0.002819 a call against ~$0.019 of total model
+  // cost per decision, sampling all of them inflated our unit cost by roughly
+  // 15%. 0.1 keeps the measurement current across prompt changes at a tenth
+  // of that. Raise it to 1 in development, where the point is to see it work.
+  COMPARISON_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
   RPC_URL: z.string().optional(),
   // Where a cold deposit watcher starts scanning. Unset means "from the current
   // head", which is right for a fresh deployment and wrong after downtime —

@@ -93,7 +93,8 @@ pnpm --filter @puno/agent compare:report
 ```
 
 Reads `model_calls` rows with `purpose = 'comparison'` (written by `tick.ts`'s sampled replay call
-after every real L2 decision — rate controlled by `COMPARISON_SAMPLE_RATE`, default 1.0) and
+after a sampled fraction of real L2 decisions — rate controlled by `COMPARISON_SAMPLE_RATE`,
+default 0.1, since the replay is never billed and so is pure cost; set it to 1 locally) and
 reports the divergence rate that decides whether plan 3.3.1's Opus trial mechanism is worth
 building. See `compare/replay.ts` for the tolerance constants used to call a divergence.
 

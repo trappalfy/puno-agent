@@ -131,11 +131,24 @@ empty string. Not a crash — a systematic quality loss, and the agent cannot no
 already acted on the same thesis an hour ago. The query layer for this already exists
 (`db/queries.ts` has `getLatestSignalContext`); only the summary builder is missing.
 
-### D2 — Comparison replay defaults to sampling 100% of decisions
+### D2 — Comparison replay defaults to sampling 100% of decisions — **FIXED**
 
-`apps/agent/src/config.ts:35` — `COMPARISON_SAMPLE_RATE` defaults to `1`. Every escalated
-decision fires an extra Haiku replay that we pay for and deliberately never bill
+`apps/agent/src/config.ts` — `COMPARISON_SAMPLE_RATE` defaulted to `1`. Every escalated
+decision fired an extra Haiku replay that we pay for and deliberately never bill
 (`tick.ts:466-476`). Correct as a development default, pure margin loss in production.
+
+Now measured rather than guessed at: a replay costs **$0.002819** against roughly **$0.019**
+of total model cost per decision, so sampling all of them inflated our unit cost by about
+**15%**. Against revenue it is small — the blended margin moves 96.2% → 95.6% — but it buys
+nothing after the first few dozen samples.
+
+Default lowered to **0.1**, documented in `.env.example` and `apps/agent/README.md`, with the
+`compare:report` empty-state message corrected: it told the reader one L2 decision was enough,
+which was true at rate 1 and is not at 0.1. Set the rate to 1 in development.
+
+Worth doing in this order: D5's intermittent failures were dropping the *verbose* replies and
+keeping the terse ones, so the sample was biased before it was small. Fixing D5 first is what
+makes a 10% sample honest.
 
 ### D3 — An empty `RPC_URL=` disabled the chain client entirely — FIXED
 
@@ -240,15 +253,42 @@ single position. Real context will be larger — more holdings, more prices, a l
 history — so input tokens will grow. Output was only 240 tokens including adaptive thinking at
 `effort: medium`; harder decisions will think longer. The structural ceiling does not move.
 
-### D5 — The comparison replay drops results on a schema violation
+### D5 — A long string discards the whole model call — **worse than first recorded, now FIXED**
 
-`replayWithHaiku` failed on the first tick with
-`riskFlags.2: Too big: expected string to have <=64 characters` — Haiku wrote a risk flag
-longer than the Zod schema allows, and the whole replay was discarded. It is caught and
-logged (`tick.ts`), so nothing breaks, but the comparison measurement is the replay's entire
-purpose: it fails silently and unevenly, precisely on the verbose outputs most worth
-comparing. A second replay later succeeded, so this is intermittent, which makes the sampling
-bias worse rather than better.
+First seen as a replay defect: `replayWithHaiku` failed on the first tick with
+`riskFlags.2: Too big: expected string to have <=64 characters`. Haiku wrote one risk flag
+longer than the Zod schema allows and the entire response was thrown away. It is caught and
+logged (`tick.ts`), so nothing broke, but the comparison measurement is the replay's whole
+purpose: it failed unevenly, precisely on the verbose outputs most worth comparing.
+
+**The scope was larger than that.** `DecisionOutputSchema` is shared — the comparison replay
+and the real L2 decision use the same schema through the same `decide()`. The L2 call at
+`tick.ts:396` is not wrapped in a try/catch, so the same violation from Opus aborts the tick.
+`main.ts:12-18` catches it per agent, so nothing crashes, but by then the user has been
+charged for the screening call and gets no decision for it. `ScreenOutputSchema.reason` (max
+280) had the identical exposure one step earlier.
+
+Root cause, and the part worth remembering: **structured output constrains shape, not string
+length.** `zodOutputFormat()` emits `maxLength` into the JSON Schema, the API does not enforce
+it during generation, and the helper's own parse is a hard `safeParse` that throws on the
+first issue (`@anthropic-ai/sdk/helpers/zod.js`). So the cap was advisory on the way out and
+fatal on the way back.
+
+Fixed in `apps/agent/src/llm/schemas.ts`: the caps stay in the JSON Schema — the model should
+still be asked for terse output — but parsing clamps prose to the cap instead of rejecting.
+Everything semantic (`action`, `ticker`, `sizePct`, `confidence`, missing fields) still fails
+loudly, because those are meaning rather than formatting. Truncation logs, so it is never
+silent.
+
+The line is drawn where the storage is: `decisions.thesis` is `text` and `decisions.risk_flags`
+is `jsonb`, so nothing downstream cares about length. Discarding a decision whose action,
+ticker, size and confidence were all valid, over the length of a label, is not a trade the
+product should make.
+
+Covered by `apps/agent/src/llm/schemas.test.ts` (11 tests), including the surrogate-pair case
+— a UTF-16 slice can split one, and Postgres rejects a lone surrogate on the way into `jsonb`,
+which would turn a cosmetic overrun into a write failure. Verified against the live API as
+well, since the custom format object is what `messages.parse()` has to accept.
 
 ---
 
@@ -264,21 +304,24 @@ The safety architecture is the strongest part of the codebase and should not be 
 - The risk engine mirrors the on-chain policy, so rejections happen before gas is spent.
 - Billing is idempotent per `(refType, refId)`; only `confirmed` trades are charged; the
   deposit indexer never advances its cursor past an uncredited event.
-- 74 contract tests and 100 unit tests pass; both apps build.
+- 74 contract tests and 111 unit tests pass; both apps build.
 
 ---
 
 ## Recommended order
 
-1. **Deploy testnet now.** It is a mock sandbox, costs 0.000270 ETH, and unblocks items 4 and
-   5 below. Nothing here is blocked by B1/B2 because the testnet script wires the mock router
-   and mock feeds itself.
-2. **Run the end-to-end scenario** (open work item 4) with `DRY_RUN=false` against the mocks.
-3. **Measure the margin** (open work item 5) — the first real test of the $0.50 decision
-   price. Everything in the business plan rests on this number and it has never been taken.
-4. **Fix D1 and D2** — small, and D1 materially improves decision quality before anyone sees
-   the output.
-5. **Phase 4: real router integration (B1)** — the actual gate on mainnet.
+1. ~~**Deploy testnet now.**~~ **Done 2026-08-14** — 0.0001124 ETH actual.
+2. ~~**Run the end-to-end scenario** (open work item 4)~~ **Done** — real trade on chain.
+3. ~~**Measure the margin** (open work item 5)~~ **Done** — 95.6%, and the $0.50 decision
+   price is conservative by roughly 50×.
+4. ~~**Fix D1 and D2**~~ **Done**, along with D5, which turned out to reach the paid decision
+   path and not just the replay.
+5. **Phase 4: real router integration (B1)** — the actual gate on mainnet. ← next
 6. **Extend the wizard to allowlist equities (B2)** and source real feed addresses.
 7. Then the pre-mainnet items already recorded: fuzz tests, `Ownable2Step` transfer off the
    hot key, contract audit.
+
+Still open and unchanged by this pass: **re-measure the screen cost**. D1's fix added the
+decision summary to the ~2,885-token screen prompt; if it now clears Haiku's 4,096-token cache
+minimum, caching engages and CLAUDE.md's open work item 7 resolves itself. It needs a tick
+against a populated decision history to measure, not a synthetic prompt.

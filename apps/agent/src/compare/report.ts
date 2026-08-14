@@ -16,7 +16,7 @@ async function main() {
 
   if (comparisons.length === 0) {
     console.log(
-      "No comparison model_calls found yet — run the worker (COMPARISON_SAMPLE_RATE > 0, the default) until at least one L2 decision has fired, then re-run this report.",
+      "No comparison model_calls found yet. Only a sampled fraction of decisions is replayed — COMPARISON_SAMPLE_RATE defaults to 0.1, so roughly ten L2 decisions are needed before the first row appears. Set it to 1 to replay every decision, then re-run this report.",
     );
     return;
   }

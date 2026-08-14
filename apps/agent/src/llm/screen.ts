@@ -1,7 +1,6 @@
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropicClient } from "./client.js";
 import { SCREEN_SYSTEM_PROMPT } from "./prompts.js";
-import { ScreenOutputSchema, type ScreenOutput } from "./schemas.js";
+import { screenOutputFormat, type ScreenOutput } from "./schemas.js";
 import { buildContextMessage, type DecisionContext } from "./context.js";
 import { calculateCostUsd } from "./cost.js";
 import type { ModelCallRecord } from "./types.js";
@@ -31,7 +30,7 @@ export async function screen(ctx: DecisionContext): Promise<ScreenResult> {
       { type: "text", text: SCREEN_SYSTEM_PROMPT, cache_control: { type: "ephemeral", ttl: "1h" } },
     ],
     messages: [{ role: "user", content: userMessage }],
-    output_config: { format: zodOutputFormat(ScreenOutputSchema) },
+    output_config: { format: screenOutputFormat() },
   });
 
   const latencyMs = Date.now() - start;

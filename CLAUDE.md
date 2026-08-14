@@ -77,6 +77,21 @@ rather than erasing the debt. The L2 decision call is separately gated on
 `decision + trade` together, so this is the rare tail, not the normal path.
 
 **Comparison replay is never billed** — it is our measurement, not a service to the user.
+Which is exactly why `COMPARISON_SAMPLE_RATE` defaults to **0.1** and not 1: at 100% it added
+~15% to our model cost per decision ($0.002819 a replay against ~$0.019) for data that stops
+being informative after a few dozen samples. Raise it to 1 in development.
+
+**Structured output constrains shape, not string length.** `zodOutputFormat()` writes
+`maxLength` into the JSON Schema, the API does not enforce it while generating, and the
+helper's own parse is a hard `safeParse` that throws on the first issue — so a `.max()` is
+advisory on the way out and fatal on the way back. Observed: Haiku wrote a 104-character
+`riskFlag` against a 64 cap and the whole call was discarded. Since `DecisionOutputSchema` is
+shared between the replay and the real L2 decision, that also aborts a tick the user has
+already paid the screening fee for. `llm/schemas.ts` therefore keeps the caps in the schema
+(the model should still be asked for terse output) and **clamps prose on parse instead of
+rejecting**, while `action`/`ticker`/`sizePct`/`confidence` still fail loudly. The line sits
+where the storage does: `thesis` is `text`, `risk_flags` is `jsonb`, so length is cosmetic —
+meaning is not. Clamp truncation logs; it must never be silent.
 
 **Money arithmetic stays in Postgres `numeric`.** `packages/shared/src/db/credits.ts` uses
 `FOR UPDATE` + `ON CONFLICT DO NOTHING` for atomic, idempotent money operations. The
@@ -117,7 +132,7 @@ including view calls embedded in argument lists. Hoist those to locals first.
 Everything below was verified by execution, not assumed:
 
 - `forge test` — 74/74 pass
-- unit tests — 100 pass (shared 51, agent 43, web 6)
+- unit tests — 111 pass (shared 51, agent 54, web 6)
 - `pnpm -r typecheck` — 4/4 projects clean
 - `pnpm lint` — clean
 - both apps build; all pages serve 200
@@ -135,8 +150,8 @@ Deploy cost, simulated:
 Testnet ETH **cannot be bridged in** — it must come from
 `https://faucet.testnet.chain.robinhood.com`.
 
-**Re-verified 2026-08-14** on the rebuilt machine: `forge test` 74/74, unit tests 100
-(shared 51, agent 43, web 6), `pnpm -r typecheck` 4/4 clean, `pnpm lint` clean, both apps
+**Re-verified 2026-08-14** on the rebuilt machine: `forge test` 74/74, unit tests 111
+(shared 51, agent 54, web 6), `pnpm -r typecheck` 4/4 clean, `pnpm lint` clean, both apps
 build (`web` emits 17 routes). Deploy simulations were *not* re-run — they need a funded
 deployer, which is open work item 1.
 
@@ -266,19 +281,25 @@ generation.
    once its prompt is cached, against $0.50 billed — the assumption is conservative by ~50×,
    and `max_tokens: 4096` caps the worst case at $0.102. Full table in the readiness file.
 
-1. **Re-measure the screen cost.** D1's fix adds the decision summary to the screen prompt
+~~6. Redo the launch-readiness audit and save it to a file~~ **Done 2026-08-14** —
+   `READINESS-2026-08-14.md`, written to disk before anything else, so compaction cannot
+   eat it again. B1/B2/B3 and D1–D5 live there; D1, D2, D3 and D5 are fixed.
+
+7. **Phase 4 — real router integration (blocker B1).** `loop/simulate.ts` hardcodes calldata
+   for `MockRouter.swap`, which exists only on 46630. The single gate on mainnet.
+8. **Extend the agent-creation wizard to allowlist equities (blocker B2)** and source real
+   Chainlink feed addresses. Today it allowlists the quote token alone, so a vault created
+   through the UI can never trade anything.
+9. **Re-measure the screen cost.** D1's fix adds the decision summary to the screen prompt
    (~2,885 tokens before). If it now crosses Haiku's 4,096-token cache minimum, caching
-   engages and open work item 7 solves itself — otherwise item 7 stands.
-5. **Margin check**: `SUM(modelCalls.costUsd)` vs charges for the same period, per level.
-   This is the first real test of the $0.50 decision assumption.
-6. **Fuzz tests on `AgentVault` arithmetic** — never written.
-7. **Haiku cache gap**: the screen prompt is ~2000 tokens against Haiku's 4096-token cache
-   minimum, so caching never engages and ~$0.0018 of the $0.005 screen margin is wasted.
-   Either pad the prompt past the minimum or accept the loss deliberately.
-8. **Redo the launch-readiness audit and save it to a file.** An earlier ~20-finding audit
-   was lost to context compaction; only S4/F1/S2/S6/B3/F2/S5 are reliably remembered. Do not
-   repeat that mistake — write audits to disk.
-9. **Before mainnet**: transfer `PunoCredits` ownership off the hot `.env` key using
+   engages and item 11 solves itself — otherwise item 11 stands. Needs a tick against a
+   populated decision history, not a synthetic prompt.
+10. **Fuzz tests on `AgentVault` arithmetic** — never written.
+11. **Haiku cache gap**: the screen prompt is ~2,885 tokens against Haiku's 4,096-token cache
+   minimum, so caching never engages (confirmed by measurement — the counters were 0 across
+   all five screen calls) and ~$0.0018 of the $0.005 screen margin is wasted. Either pad the
+   prompt past the minimum or accept the loss deliberately.
+12. **Before mainnet**: transfer `PunoCredits` ownership off the hot `.env` key using
    `Ownable2Step`.
 
 **Unresolved, not blocking:** selling a token for access to a service that trades

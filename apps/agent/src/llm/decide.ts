@@ -1,7 +1,6 @@
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropicClient } from "./client.js";
 import { DECIDE_SYSTEM_PROMPT } from "./prompts.js";
-import { DecisionOutputSchema, type DecisionOutput } from "./schemas.js";
+import { decisionOutputFormat, type DecisionOutput } from "./schemas.js";
 import { buildContextMessage, type DecisionContext } from "./context.js";
 import { calculateCostUsd } from "./cost.js";
 import type { ModelCallRecord } from "./types.js";
@@ -53,7 +52,7 @@ export async function decide(ctx: DecisionContext, opts: DecideOptions): Promise
     system: [systemBlock],
     messages: [{ role: "user", content: userMessage }],
     output_config: {
-      format: zodOutputFormat(DecisionOutputSchema),
+      format: decisionOutputFormat(),
       ...(opts.useThinking ? { effort: "medium" as const } : {}),
     },
   });
