@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { runTick } from "../loop/tick.js";
+import { refreshDemoFeeds } from "../testnet/price-keeper.js";
 
 export interface TrialPassResult {
   ran: number;
@@ -70,6 +71,17 @@ export async function runTrialQueue(): Promise<TrialPassResult> {
     if (!claim) break;
 
     try {
+      // Forced, not just scheduled. The periodic keeper is enough to keep the
+      // feeds alive in general, but a free run is somebody's first and only
+      // impression: it must not depend on where the timer happened to be. A
+      // stale mark makes the agent decline to trade, correctly and unhelpfully.
+      //
+      // Deliberately inside the try: if the refresh fails the run fails with a
+      // real reason, rather than proceeding to produce the refusal this exists
+      // to prevent — and the user is not charged for a decision that was never
+      // going to represent the product.
+      await refreshDemoFeeds(true);
+
       await runTick(claim.agentId, { paper: true });
       await finish(claim.id, null);
       ran++;

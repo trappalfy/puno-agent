@@ -53,6 +53,18 @@ const envSchema = z.object({
   // that is empty most of the time; two seconds of that costs nothing next to
   // the impression that pressing the button did nothing.
   TRIAL_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2_000),
+  // Testnet mock oracles go stale an hour after anyone last set them, which
+  // made the demo agent refuse to trade. On by default *on testnet only* —
+  // see testnet/price-keeper.ts for why it broadcasts even under DRY_RUN, and
+  // why it cannot reach mainnet. Set to "false" to switch it off.
+  TESTNET_PRICE_KEEPER: z
+    .string()
+    .optional()
+    .transform((v) => v !== "false" && v !== "0"),
+  // Comfortably inside EQUITY_STALENESS (1h) so a feed is refreshed long
+  // before it can expire, and infrequent enough that the gas is negligible:
+  // at 0.01 gwei a setAnswer costs about 3e-7 ETH.
+  TESTNET_PRICE_KEEPER_INTERVAL_MS: z.coerce.number().int().positive().default(600_000),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -88,6 +100,8 @@ export const config = {
   creditsWatcherStartBlock: env.CREDITS_WATCHER_START_BLOCK,
   creditsPollIntervalMs: env.CREDITS_POLL_INTERVAL_MS,
   trialPollIntervalMs: env.TRIAL_POLL_INTERVAL_MS,
+  testnetPriceKeeper: env.TESTNET_PRICE_KEEPER,
+  testnetPriceKeeperIntervalMs: env.TESTNET_PRICE_KEEPER_INTERVAL_MS,
 } as const;
 
 export type Config = typeof config;

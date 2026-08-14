@@ -99,6 +99,26 @@ grant cannot fund a *live* run — that is what the tariff is for. Locked by
 dividing by the decision price: the earlier $1.00 grant was documented as buying two decisions
 and bought one, because the L2 gate reserves `decision + trade` up front.
 
+**Testnet mock feeds need a keeper, or the demo shows a refusal.**
+`MockAggregatorV3` stamps `block.timestamp` when the answer is *set*, not when it is read, so a
+testnet feed goes stale one hour after anyone last touched it. Measured: TSLA 12,176 s and AAPL
+8,276 s against a 3,600 s window. The visible effect was the demo agent declining to trade and
+explaining, correctly, that it would not act on an untrusted mark — the worst possible first
+impression, and systematic rather than occasional. `apps/agent/src/testnet/price-keeper.ts`
+refreshes them on a timer and, forced, immediately before every free-tier run so a demo never
+depends on timer phase. It also walks the equity prices (±1.2% a pass, mean-reverting to an
+anchor, quote token pinned) so triggers can fire and the market is not frozen.
+
+Note this is *not* fixable in the agent's judgement: `AgentVault._nav()` reverts on a stale
+feed, so an agent argued into trading anyway would only reach a failed simulation. A fresh mark
+is the only thing that works, and loosening the staleness check would break the one invariant
+that measurably mattered against real feeds.
+
+The keeper **broadcasts while `DRY_RUN=true`** — deliberate, and the one exception. DRY_RUN's
+promise is that no *trade* is sent; this touches no vault, router or funds, only a mock oracle
+that exists on testnet. It cannot reach mainnet twice over: `isTestnet` is false there and
+`demoVault` is null. `TESTNET_PRICE_KEEPER=false` switches it off.
+
 **Paper mode is per-agent, and `agents.dry_run` is what says so.** The column was written by
 the creation wizard and rendered as a "Dry run" badge (`AgentCard.tsx`) from the beginning, but
 nothing read it — only the process-wide `DRY_RUN` decided whether a trade was broadcast. An

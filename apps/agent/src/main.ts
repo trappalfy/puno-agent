@@ -4,6 +4,7 @@ import { db } from "./db/client.js";
 import { runTick } from "./loop/tick.js";
 import { runDepositWatcher } from "./billing/watcher.js";
 import { runTrialQueue } from "./trial/runner.js";
+import { refreshDemoFeeds } from "./testnet/price-keeper.js";
 import { config } from "./config.js";
 
 async function tickAllAgents(): Promise<void> {
@@ -53,6 +54,19 @@ async function pollTrials(): Promise<void> {
   }
 }
 
+async function pollPriceKeeper(): Promise<void> {
+  try {
+    const result = await refreshDemoFeeds();
+    if (result.refreshed > 0) {
+      console.log(`[keeper] refreshed ${result.refreshed} testnet feed(s)`);
+    }
+  } catch (err) {
+    // Never fatal. A missed refresh only means the next pass does the work; the
+    // trial runner forces its own refresh before every free run regardless.
+    console.error("[keeper] pass failed:", err);
+  }
+}
+
 async function main(): Promise<void> {
   console.log(
     `Puno agent worker starting — network=${config.network.key} dryRun=${config.dryRun} tickIntervalMs=${config.tickIntervalMs}`,
@@ -79,6 +93,18 @@ async function main(): Promise<void> {
   setInterval(() => {
     void pollDeposits();
   }, config.creditsPollIntervalMs);
+
+  if (config.network.isTestnet && config.network.demoVault && config.testnetPriceKeeper) {
+    console.log(
+      "Testnet price keeper enabled — mock oracles are refreshed so the demo " +
+        "agent has a fresh mark to trade against. Writes to mock feeds only, " +
+        "never to a vault (see testnet/price-keeper.ts).",
+    );
+    await pollPriceKeeper();
+    setInterval(() => {
+      void pollPriceKeeper();
+    }, config.testnetPriceKeeperIntervalMs);
+  }
 
   // Its own interval too, and the fastest one: a free run has a person waiting
   // on it, while the trading tick has nobody watching any given pass.
