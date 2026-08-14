@@ -33,7 +33,7 @@ Prices are canonical in **USD** (`packages/shared/src/pricing.ts`):
 
 ```ts
 PRICES_USD = { screen: 0.01, decision: 0.50, trade: 0.25 }
-STARTER_GRANT_USD = 3.0        // ~6 decisions, one grant per account, ever
+STARTER_GRANT_USD = 1.0        // 2 decisions, one grant per account, ever
 MIN_DEPOSIT_USD = 5.0
 LOW_BALANCE_WARNING_USD = 1.0
 ```
@@ -180,6 +180,37 @@ equivalent container for anyone who prefers it. Migrations are applied; 13 table
 
 ---
 
+## Testnet deployment (chain 46630, 2026-08-14)
+
+Live and verified by execution — bytecode present, wiring read back from chain. Addresses
+are in `packages/shared/src/network/config.ts` under `NETWORKS.testnet`.
+
+| Contract | Address |
+|---|---|
+| VaultFactory | `0x486901cBa710C5Fb1032AB1bB25d190E3f845998` |
+| PunoCredits | `0xD0D4B491D8980cd49b0eCf151ad30f8f779D74f6` |
+| Mock PUNO | `0x1A480B089d8A5E2B77A1bD8908aBFF9bB6af21da` |
+| Demo AgentVault | `0xcFA434255f47F4C8777043540d253CEDFb36B5e9` |
+| MockRouter | `0x58fc3D03E57aC4b909b04356CF9Ae8b420885719` |
+| Mock USDG (quote) | `0x5fecF7bA6365E6763b8984c43307B417A498aD40` |
+
+Real cost **0.0001124 ETH**, not the estimated 0.000270 — forge padded ~2.4×.
+
+Two things the deploy taught, both now in `READINESS-2026-08-14.md`:
+
+- **`DeployTestnet` does not call `setAgent`.** The demo vault ships with no agent, so
+  `guard()` blocks every tick until the owner arms a key. Done manually here, 30-day expiry.
+- **`PunoCredits.deposit` reverts when the payer is the treasury** — self-transfer means a
+  zero balance delta and `require(received > 0)` fires. `DeployTestnet` makes the deployer
+  both, so the billing path is untestable out of the box. Worked around with `setTreasury`;
+  the testnet treasury is now `0x2169f2d6c60600f7194bF76e66287a64513B5eA9`.
+
+`routers.oneInch` for testnet deliberately holds the **MockRouter** address, because the
+agent-creation wizard reads exactly that field to fill `allowedRouters`. Do not "correct" it
+back to the 1inch address — nothing named 1inch exists on 46630.
+
+---
+
 ## SECURITY INCIDENT — read before any deploy
 
 On **2026-08-13** the development machine was found backdoored. A clipboard hijacker was
@@ -221,17 +252,17 @@ generation.
 
 ## Open work, roughly in order
 
-1. **Fund the fresh deployer** `0x7b22e721AeE49C4306699a5E77243372FA6afBDa` from the faucet
-   (needs 0.000270 ETH). The key was regenerated on the clean system on 2026-08-14; only
-   the funding is left. `ANTHROPIC_API_KEY` in `.env` is still empty and must be pasted in
-   before any agent run.
-2. **Run `DeployTestnet`**, then write the resulting addresses into
-   `packages/shared/src/network/config.ts`.
-3. **Set a manual PUNO/USD rate** in `token_price_overrides` (no liquidity exists yet, so
-   the TWAP source is a stub with a finished interface).
-4. **End-to-end scenario**: deposit → indexer credits → agent runs with `DRY_RUN=false` to a
-   real trade → verify all three charges (screen, decision, trade) against the ledger and
-   the balance.
+~~1. Fund the fresh deployer~~ **Done 2026-08-14** — faucet sent 0.01 ETH.
+~~2. Run `DeployTestnet` and write the addresses into config.ts~~ **Done 2026-08-14** —
+   see *Testnet deployment* below; `NETWORKS.testnet` now carries real addresses.
+~~3. Set a manual PUNO/USD rate~~ **Done 2026-08-14** — $0.01, a testnet placeholder for the
+   mock token. The mainnet rate is a real business decision, not a config value to copy.
+
+1. **`ANTHROPIC_API_KEY` is still empty in `.env`.** It blocks everything below.
+2. **Finish the end-to-end scenario.** The billing half is proven on chain (deposit →
+   indexer → credit → ledger invariant → idempotent replay; see `READINESS-2026-08-14.md`).
+   What remains is the model path: agent runs with `DRY_RUN=false` to a real trade, and all
+   three charges (screen, decision, trade) verified against the ledger.
 5. **Margin check**: `SUM(modelCalls.costUsd)` vs charges for the same period, per level.
    This is the first real test of the $0.50 decision assumption.
 6. **Fuzz tests on `AgentVault` arithmetic** — never written.

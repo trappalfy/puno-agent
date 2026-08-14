@@ -67,17 +67,28 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     isTestnet: true,
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     tokens: {
-      // Testnet liquidity is not guaranteed — see contracts/mocks/ (Phase 2).
-      // Placeholders until real testnet addresses are confirmed at deploy time.
+      // Real testnet liquidity does not exist, so DeployTestnet stands up mocks
+      // instead — see contracts/script/DeployTestnet.s.sol. `usdg` below is the
+      // deployed MockStockToken, not Global Dollar. Nothing reads these fields
+      // (the quote token is read live from VaultFactory.quoteToken); they are
+      // here so the recorded addresses match what is actually on chain.
+      // weth has no testnet counterpart and is still the mainnet address.
       weth: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
-      usdg: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+      usdg: "0x5fecF7bA6365E6763b8984c43307B417A498aD40",
     },
     routers: {
-      oneInch: "0x5A705DE8982235a7fa45bB83dCaCf03a211389C7",
+      // NOT 1inch on testnet — this is the deployed MockRouter. The field keeps
+      // its mainnet name because the agent-creation wizard reads exactly this
+      // one field to fill `allowedRouters` (apps/web .../agents/new/page.tsx).
+      // Leaving the mainnet 1inch address here would allowlist a router that
+      // does not exist on 46630, and every trade would revert.
+      oneInch: "0x58fc3D03E57aC4b909b04356CF9Ae8b420885719",
     },
-    vaultFactory: null,
-    punoToken: null,
-    punoCredits: null,
+    // Deployed 2026-08-14 by DeployTestnet, verified on chain (bytecode present,
+    // VaultFactory.quoteToken -> usdg above, PunoCredits.token -> punoToken).
+    vaultFactory: "0x486901cBa710C5Fb1032AB1bB25d190E3f845998",
+    punoToken: "0x1A480B089d8A5E2B77A1bD8908aBFF9bB6af21da",
+    punoCredits: "0xD0D4B491D8980cd49b0eCf151ad30f8f779D74f6",
   },
 };
 

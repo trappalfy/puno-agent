@@ -22,9 +22,15 @@ export const PRICES_USD = {
 export type BillableEvent = keyof typeof PRICES_USD;
 
 /// Granted once, at first sign-in. Deliberately small — enough to watch the
-/// agent reason a few times before deciding to fund it, not enough to run a
-/// strategy for free.
-export const STARTER_GRANT_USD = 3.0;
+/// agent reason twice before deciding to fund it, not enough to run a strategy
+/// for free.
+///
+/// This is the one cost that never recovers: it is paid in real dollars to
+/// Anthropic and returns nothing to the treasury, for every account that ever
+/// signs in, converting or not. Cut from $3.00 to $1.00 on 2026-08-14 for
+/// exactly that reason — at $0.50 a decision it buys two, which is enough to
+/// see the agent think and not enough to be an acquisition budget.
+export const STARTER_GRANT_USD = 1.0;
 
 /// Below this a top-up costs more in gas and indexing than it delivers.
 export const MIN_DEPOSIT_USD = 5.0;

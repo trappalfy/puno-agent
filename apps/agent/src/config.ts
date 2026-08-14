@@ -62,7 +62,11 @@ const network: NetworkConfig = getNetwork(env.NETWORK);
 export const config = {
   databaseUrl: env.DATABASE_URL,
   network,
-  rpcUrl: env.RPC_URL ?? network.rpcUrl,
+  // `||`, not `??`: .env.example ships `RPC_URL=` (empty), which is a valid
+  // string and so survives `??`, leaving the transport with no URL at all.
+  // Matches how agentPrivateKey/vaultAddress below treat the same empty-string
+  // case.
+  rpcUrl: env.RPC_URL || network.rpcUrl,
   dryRun,
   agentPrivateKey: env.AGENT_PRIVATE_KEY || undefined,
   anthropicApiKey: env.ANTHROPIC_API_KEY,
