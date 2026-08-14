@@ -135,6 +135,49 @@ Deploy cost, simulated:
 Testnet ETH **cannot be bridged in** — it must come from
 `https://faucet.testnet.chain.robinhood.com`.
 
+**Re-verified 2026-08-14** on the rebuilt machine: `forge test` 74/74, unit tests 100
+(shared 51, agent 43, web 6), `pnpm -r typecheck` 4/4 clean, `pnpm lint` clean, both apps
+build (`web` emits 17 routes). Deploy simulations were *not* re-run — they need a funded
+deployer, which is open work item 1.
+
+---
+
+## Development environment (rebuilt 2026-08-14)
+
+The machine was wiped, so this is the full list of what a bare Windows box needs. Nothing
+here is optional; all of it was installed and verified by execution.
+
+| Tool | Version | Source |
+|---|---|---|
+| Node.js | 24.19.0 | winget `OpenJS.NodeJS.LTS` |
+| pnpm | 11.21.0 | `npm i -g pnpm@11.21.0` — matches the `packageManager` pin exactly |
+| Git | 2.55.0.3 | winget `Git.Git` |
+| Foundry | 1.5.1-stable | GitHub release zip → `~/.foundry/bin`, added to user PATH |
+| PostgreSQL | 16.15-1 | EDB installer, service `postgresql-x64-16` |
+
+Traps worth remembering, all hit on 2026-08-14:
+
+- **Foundry is not in winget.** `foundryup` is a shell script and needs bash. Install the
+  Windows binaries straight from
+  `https://github.com/foundry-rs/foundry/releases/download/stable/foundry_stable_win32_amd64.zip`.
+- **winget cannot install PostgreSQL.** EDB's CDN returns **403** to winget's User-Agent.
+  Download `https://get.enterprisedb.com/postgresql/postgresql-16.15-1-windows-x64.exe`
+  with a browser User-Agent instead. The installer is Authenticode-signed by EnterpriseDB —
+  check that, given the project's history.
+- **The EDB installer needs its arguments as one quoted string.** PowerShell's
+  `Start-Process -ArgumentList @(...)` splits `C:\Program Files\...` on the space and the
+  installer dies with *"Expected option but got Files\PostgreSQL\16"* — exit code 1, no log.
+- **`pnpm install` will time out on a slow link.** This connection runs ~0.34 MB/s; the
+  default fetch timeout kills the install at ~575/578 packages. Raise it once:
+  `pnpm config set --global fetch-timeout 900000` and `fetch-retries 8`. Second run: 3m57s.
+- **`contracts/lib` submodules must be restored by hand** if the tree arrives without
+  `.git` (e.g. from a ZIP). Clone at the `contracts/foundry.lock` revisions:
+  forge-std `v1.16.2` (`bf647bd6`), openzeppelin-contracts `v5.7.0` (`cab19933`).
+
+Local Postgres is native, not Docker — role `puno`, password `puno`, database `puno`, which
+is exactly the `DATABASE_URL` in `.env.example`. `docker-compose.yml` still describes the
+equivalent container for anyone who prefers it. Migrations are applied; 13 tables exist.
+
 ---
 
 ## SECURITY INCIDENT — read before any deploy
@@ -158,12 +201,30 @@ wiped and reinstalled Windows on both drives.
   whoever deploys `PunoCredits` owns it.
 - Confirm with the user that the reinstall is done before treating any local key as safe.
 
+**Resolved on 2026-08-14.** The user confirmed the Windows reinstall. The whole toolchain was
+rebuilt from scratch on the clean system (see *Development environment* below) and a new root
+`.env` was generated there — `ENCRYPTION_KEY`, `SESSION_SECRET`, `DEPLOYER_PRIVATE_KEY` and
+`AGENT_PRIVATE_KEY` are all fresh; nothing was carried across the reinstall. New addresses:
+
+| Role | Address |
+|---|---|
+| deployer | `0x7b22e721AeE49C4306699a5E77243372FA6afBDa` |
+| agent | `0x389AA9c066854a1e1A62a9F49910760a8D010adD` |
+
+The old deployer `0x81FDDF1dAD8ED65fA60bF1F4B89A3FA5F5B829D2` and the attacker's
+`0xeB73130796f89e2df501526663e1cD114eAC20Ab` must never appear in a transaction again — if
+either shows up in a deploy, stop. Because the original attack was a *clipboard* hijack,
+addresses still deserve a visual check at the moment of use, not just at the moment of
+generation.
+
 ---
 
 ## Open work, roughly in order
 
-1. **Fund a fresh deployer** from the faucet (needs 0.000270 ETH), after regenerating
-   `.env` secrets on the clean system.
+1. **Fund the fresh deployer** `0x7b22e721AeE49C4306699a5E77243372FA6afBDa` from the faucet
+   (needs 0.000270 ETH). The key was regenerated on the clean system on 2026-08-14; only
+   the funding is left. `ANTHROPIC_API_KEY` in `.env` is still empty and must be pasted in
+   before any agent run.
 2. **Run `DeployTestnet`**, then write the resulting addresses into
    `packages/shared/src/network/config.ts`.
 3. **Set a manual PUNO/USD rate** in `token_price_overrides` (no liquidity exists yet, so
@@ -207,5 +268,8 @@ pnpm -r typecheck && pnpm lint && pnpm test    # full regression
 forge test -vv                                  # contracts (run from contracts/)
 pnpm --filter @puno/web dev                     # product app
 pnpm --filter @puno/site dev                    # landing
-pnpm --filter @puno/agent migrate               # apply DB migrations
+pnpm --filter @puno/agent db:migrate            # apply DB migrations
 ```
+
+Note: the script is `db:migrate`, not `migrate` — this file said `migrate` until 2026-08-14
+and that command does not exist.
