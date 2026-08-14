@@ -21,16 +21,28 @@ export const PRICES_USD = {
 
 export type BillableEvent = keyof typeof PRICES_USD;
 
-/// Granted once, at first sign-in. Deliberately small — enough to watch the
-/// agent reason twice before deciding to fund it, not enough to run a strategy
-/// for free.
+/// Granted once, at first sign-in. Buys **exactly one** paper decision — the
+/// free tier exists so someone can watch the agent think once, and for nothing
+/// else. Real trading is what the tariff is for.
 ///
-/// This is the one cost that never recovers: it is paid in real dollars to
-/// Anthropic and returns nothing to the treasury, for every account that ever
-/// signs in, converting or not. Cut from $3.00 to $1.00 on 2026-08-14 for
-/// exactly that reason — at $0.50 a decision it buys two, which is enough to
-/// see the agent think and not enough to be an acquisition budget.
-export const STARTER_GRANT_USD = 1.0;
+/// The number is `screen + decision`, not a round figure, and it is deliberate:
+/// a paper run never reaches a billable trade (only a `confirmed` trade is
+/// charged — loop/tick.ts), so $0.51 is the exact cost of one full free run and
+/// the balance lands on zero. Earlier values left a remainder that could not buy
+/// anything, which reads to the user as money we took and did not honour.
+///
+/// History: $3.00 → $1.00 (2026-08-14) → $0.51. The $1.00 comment claimed it
+/// bought two decisions; it bought one, because the L2 gate reserves
+/// `decision + trade` up front and $0.24 could not clear it. Verified by
+/// simulating the real gates against the real prices, not by arithmetic on the
+/// decision price alone.
+///
+/// This is the one cost that never recovers: paid in real dollars to Anthropic,
+/// returning nothing to the treasury, for every account that ever signs in —
+/// converting or not. Our measured cost for one screen + one decision is about
+/// $0.034, so the grant is priced above what it costs us and the exposure per
+/// signup is a few cents, not a dollar.
+export const STARTER_GRANT_USD = PRICES_USD.screen + PRICES_USD.decision;
 
 /// Below this a top-up costs more in gas and indexing than it delivers.
 export const MIN_DEPOSIT_USD = 5.0;

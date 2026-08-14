@@ -90,6 +90,24 @@ The fee is a receivable, not a purchase decision, so the balance is allowed to g
 rather than erasing the debt. The L2 decision call is separately gated on
 `decision + trade` together, so this is the rare tail, not the normal path.
 
+**The free tier is exactly one paper decision.** `STARTER_GRANT_USD = screen + decision =
+$0.51`, deliberately not a round number: a paper run never reaches a billable trade (only a
+`confirmed` trade is charged), so this is the exact cost of one free run and the balance lands
+on zero. A remainder too small to buy anything reads as money taken and not honoured. The
+grant cannot fund a *live* run — that is what the tariff is for. Locked by
+`apps/agent/src/quota/starter-grant.test.ts`, which walks the real gates in order rather than
+dividing by the decision price: the earlier $1.00 grant was documented as buying two decisions
+and bought one, because the L2 gate reserves `decision + trade` up front.
+
+**Paper mode is per-agent, and `agents.dry_run` is what says so.** The column was written by
+the creation wizard and rendered as a "Dry run" badge (`AgentCard.tsx`) from the beginning, but
+nothing read it — only the process-wide `DRY_RUN` decided whether a trade was broadcast. An
+agent marked dry-run in the database would have traded for real as soon as the worker ran with
+`DRY_RUN=false`, while its owner's console said otherwise. `runTick` now reads it. The three
+sources — `config.dryRun`, `agents.dry_run`, `TickOptions.paper` — are OR-ed so each can only
+*add* a restriction; nothing can turn a run that any of them called paper into a live one. In
+paper mode the L2 gate reserves the decision alone, since no billable trade can result.
+
 **Comparison replay is never billed** — it is our measurement, not a service to the user.
 Which is exactly why `COMPARISON_SAMPLE_RATE` defaults to **0.1** and not 1: at 100% it added
 ~15% to our model cost per decision ($0.002819 a replay against ~$0.019) for data that stops

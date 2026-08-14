@@ -53,6 +53,7 @@ async function simulateExecuteAndPersist(params: {
   decisionId: string | null;
   trade: ProposedTrade;
   action: "buy" | "sell";
+  paper: boolean;
   fillSymbol?: string | undefined;
   fillPriceUsd?: number | undefined;
   fillDecimals?: number | undefined;
@@ -78,7 +79,7 @@ async function simulateExecuteAndPersist(params: {
     return;
   }
 
-  const exec = await executeTrade(params.vault, params.trade, sim.swapCalldata);
+  const exec = await executeTrade(params.vault, params.trade, sim.swapCalldata, params.paper);
   if (exec.txHash) {
     console.log(`  [execute] ${exec.status}: ${config.network.explorerUrl}/tx/${exec.txHash}`);
   }
@@ -145,18 +146,41 @@ async function simulateExecuteAndPersist(params: {
   }
 }
 
+export interface TickOptions {
+  /// Force paper mode for this run regardless of what the agent row says.
+  ///
+  /// Belt and braces for the free-tier trial: trial agents are stored with
+  /// `dryRun: true` and that alone is enough, but the free path must not become
+  /// a live path because a row was edited or a default changed. Never set this
+  /// to `false` to force a live run — it can only ever add a restriction.
+  paper?: boolean;
+}
+
 /// One full pass of the plan 2.3 loop for a single agent: L0 (guard, market,
 /// portfolio, protect, triggers) always runs; L1/L2 only run if a trigger
 /// fired and the budget/rate-limit gates allow it. Exceptions from this
 /// function are the caller's (main.ts) problem — a single agent's tick
 /// failing must never take down the process or block other agents.
-export async function runTick(agentId: string): Promise<void> {
+export async function runTick(agentId: string, opts: TickOptions = {}): Promise<void> {
   const agentCtx = await getAgentContext(agentId);
   if (!agentCtx) {
     console.error(`[tick] agent ${agentId} not found`);
     return;
   }
   const { agent, vault: vaultRow, limits } = agentCtx;
+
+  // `agents.dry_run` is the per-agent switch. It was written by the creation
+  // wizard and rendered as a "Dry run" badge in the console from the start, but
+  // nothing read it — only the process-wide DRY_RUN decided whether a trade was
+  // broadcast. An agent marked dry-run in the database would have traded for
+  // real the moment the worker ran with DRY_RUN=false, while the UI kept telling
+  // its owner it was only pretending. Reading it here is what makes the badge
+  // true.
+  //
+  // OR-ed with the process flag and the per-run option: each can only add a
+  // restriction, so no combination of config, row and caller can turn a run
+  // that any of them called paper into a live one.
+  const paper = opts.paper === true || agent.dryRun;
   const vault = vaultRow.address as Address;
   const agentAddress = agent.agentAddress as Address;
   const quoteToken = vaultRow.quoteToken as Address;
@@ -274,6 +298,7 @@ export async function runTick(agentId: string): Promise<void> {
         decisionId: null,
         trade: verdict.trade,
         action: "sell",
+        paper,
       });
     }
   }
@@ -377,9 +402,16 @@ export async function runTick(agentId: string): Promise<void> {
   // Gated on decision + trade together: escalating means the agent may well
   // trade, and charging for the thesis only to find the balance can't cover
   // execution would leave the user with a bill and no position.
+  //
+  // A paper run reserves the decision alone. Only a `confirmed` trade is ever
+  // charged and paper mode cannot produce one, so there is no execution fee to
+  // hold back — reserving it anyway would price the free tier at $0.76 for a
+  // $0.51 run and strand the difference. The rationale above is about leaving
+  // someone billed with no position; in paper mode there is no position to
+  // take.
   const budgetCheckL2 = await checkBalanceBeforeCall(
     agent.accountId,
-    priceFor("decision", billing) + priceFor("trade", billing),
+    priceFor("decision", billing) + (paper ? 0 : priceFor("trade", billing)),
   );
   if (!budgetCheckL2.allowed) {
     console.warn(`${label} L2 call blocked: ${budgetCheckL2.reason}`);
@@ -454,6 +486,7 @@ export async function runTick(agentId: string): Promise<void> {
       decisionId,
       trade: verdict.trade,
       action: decideResult.output.action === "buy" ? "buy" : "sell",
+      paper,
       fillSymbol: tickerPrice?.symbol,
       fillPriceUsd: tickerPrice ? usd1e18ToNumber(tickerPrice.priceUsd1e18) : undefined,
       fillDecimals: tickerPrice?.decimals,
