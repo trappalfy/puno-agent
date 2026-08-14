@@ -8,6 +8,12 @@ Puno's own token.
 This file is the working context for the project. It is loaded automatically each session.
 Read it before touching anything.
 
+> **`LAUNCH-CHECKLIST.md` is the standing answer to "what is left" and "what must be proven
+> before a deploy".** Open it at the start of any session that touches deployment, readiness,
+> or "are we ready" — and before saying anything is ready. It carries the runnable gate
+> (expected test counts, the on-chain invariants, the address rule) that this file only
+> summarises. Update it in place; never start a second one.
+
 ---
 
 ## Layout
@@ -318,6 +324,9 @@ generation.
 ---
 
 ## Open work, roughly in order
+
+**Canonical list: `LAUNCH-CHECKLIST.md`.** What follows is the short form kept for continuity;
+when the two disagree, the checklist is right — it is the one that gets updated.
 
 ~~1. Fund the fresh deployer~~ **Done 2026-08-14** — faucet sent 0.01 ETH.
 ~~2. Run `DeployTestnet` and write the addresses into config.ts~~ **Done 2026-08-14** —
