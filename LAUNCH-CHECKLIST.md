@@ -125,12 +125,15 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
   `priceDecimals > 18` hole our own fuzzing found on 2026-08-15 would have bricked a token
   permanently. That class is real, was found here, and stays the reason to keep fuzzing.
 
-- [ ] **Decide on the dead fee mechanism** (`setFeeConfig`/`collectFee`). No longer blocked on the
-      audit, and the argument for deleting it got _stronger_ without one: it is a **second path by
-      which the quote token leaves a vault**, it has never been active, it cannot serve billing
-      (`onlyOwner` where the owner is the user), and it already carries a documented accounting
-      gap. Unaudited dead code that moves funds is worse than audited dead code that moves funds.
-      Deleting it drops ~52 source lines, 4 storage slots, 2 events and a 120-line test file.
+- [x] **Dead fee mechanism removed. Done 2026-08-16.** `setFeeConfig`, `collectFee`,
+      `MAX_FEE_BPS`, `feeRecipient`, `feeBps`, `highWaterMark`, `highWaterMarkInitialized`, two
+      events and `test/AgentVault.Fees.t.sol` are gone. It was never active, could not serve
+      billing, and `collectFee` moved the quote token out — a second path by which value left a
+      vault, against the one claim this contract most needs to make without a caveat. **`AgentVault`
+      now has exactly one way out and it is `onlyOwner`.** Scope dropped 430 → **389 nSLOC**, 24 →
+      **22 external functions**. Tests 88 → **80**, because the 8 that went were the ones covering
+      the removed code; no test was weakened. A stale `forge-lint` suppression was fixed in the
+      same pass (it sat above three comment lines, so it silenced nothing): 12 → 11 warnings.
 - [x] **Fuzz tests on `AgentVault` arithmetic. Done 2026-08-15** —
       `test/AgentVault.Arithmetic.t.sol`, 9 properties at 256 runs each, covering feed-decimal
       normalisation, the oracle floor (never above fair value, exact at zero slippage, monotonic
@@ -248,7 +251,7 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | `pnpm lint`                          | clean                                  |
 | `pnpm format:check`                  | clean — a real signal since 2026-08-15 |
 | `pnpm test`                          | **156** — shared 63, agent 80, web 13  |
-| `forge test -vv` (from `contracts/`) | **88/88**                              |
+| `forge test -vv` (from `contracts/`) | **80/80**                              |
 | `pnpm -r build`                      | both apps build; `web` emits 20 routes |
 
 If a count is _lower_ than the number above, tests were deleted or skipped — investigate before

@@ -38,10 +38,7 @@ contract AgentVaultArithmeticTest is VaultTestBase {
 
     /// @dev Same shape as MockAggregatorV3 but with a configurable decimals()
     /// so the 18-decimal assumption baked into `_normalizedPrice` can be probed.
-    function _feedWithDecimals(uint8 decimals_, int256 answer)
-        internal
-        returns (MockAggregatorV3)
-    {
+    function _feedWithDecimals(uint8 decimals_, int256 answer) internal returns (MockAggregatorV3) {
         return new MockAggregatorV3(decimals_, "PROBE / USD", answer);
     }
 

@@ -23,10 +23,6 @@ contract AgentVault is ReentrancyGuard {
     // Constants
     // ---------------------------------------------------------------------
 
-    /// @dev Hard ceiling on feeBps so a compromised or careless owner can
-    /// never configure a 100% performance fee. Phase 1 always runs at 0.
-    uint256 public constant MAX_FEE_BPS = 2_000; // 20%
-
     uint256 public constant BPS_DENOMINATOR = 10_000;
 
     /// @dev Ceiling on any single feed's configured staleness window. Feeds
@@ -46,9 +42,11 @@ contract AgentVault is ReentrancyGuard {
 
     address public immutable owner;
 
-    /// @notice Token fee amounts are paid out in (e.g. USDG). Fixed at
-    /// construction — the owner cannot redirect fee payout to a token that
-    /// dodges the NAV/price-feed accounting below.
+    /// @notice The unit the vault denominates trades in (e.g. USDG), and the
+    /// token every swap must have on one side. Fixed at construction rather
+    /// than settable: the owner changing it mid-life would re-denominate the
+    /// position history and the rolling notional window against a different
+    /// asset, silently invalidating the caps already recorded in them.
     address public immutable quoteToken;
 
     address public agent;
@@ -116,15 +114,6 @@ contract AgentVault is ReentrancyGuard {
     uint256 private tradeHistoryHead;
 
     // ---------------------------------------------------------------------
-    // Fee hooks (phase 1: feeBps is always 0 — see plan 2.2 / 3.5)
-    // ---------------------------------------------------------------------
-
-    address public feeRecipient;
-    uint256 public feeBps;
-    uint256 public highWaterMark; // 1e18-scaled USD NAV
-    bool public highWaterMarkInitialized;
-
-    // ---------------------------------------------------------------------
     // Events
     // ---------------------------------------------------------------------
 
@@ -144,8 +133,6 @@ contract AgentVault is ReentrancyGuard {
     event PriceFeedSet(address indexed token, address indexed aggregator, uint32 maxStaleness);
     event VaultPaused();
     event VaultUnpaused();
-    event FeeConfigUpdated(address indexed recipient, uint256 bps);
-    event FeeCollected(address indexed recipient, uint256 amountPaid, uint256 nav);
 
     constructor(address _owner, address _quoteToken) {
         require(_owner != address(0), "AgentVault: zero owner");
@@ -212,9 +199,7 @@ contract AgentVault is ReentrancyGuard {
         // configuration time is the only moment anyone can still fix it.
         require(priceDecimals <= 18, "AgentVault: price decimals too high");
         priceFeeds[token] = PriceFeed({
-            aggregator: aggregator,
-            priceDecimals: priceDecimals,
-            maxStaleness: maxStaleness
+            aggregator: aggregator, priceDecimals: priceDecimals, maxStaleness: maxStaleness
         });
         emit PriceFeedSet(token, aggregator, maxStaleness);
     }
@@ -337,58 +322,28 @@ contract AgentVault is ReentrancyGuard {
         emit TradeExecuted(tokenIn, tokenOut, amountIn, amountOut, router, notionalUsd);
     }
 
-    // ---------------------------------------------------------------------
-    // Fee hooks — dead code path in phase 1 (feeBps is always 0), but
-    // deployed and tested so no user migration is needed if it's turned on
-    // later. See plan 2.2 / 3.5.
-    // ---------------------------------------------------------------------
-
-    function setFeeConfig(address recipient, uint256 bps) external onlyOwner {
-        require(bps <= MAX_FEE_BPS, "AgentVault: fee exceeds cap");
-        feeRecipient = recipient;
-        feeBps = bps;
-        emit FeeConfigUpdated(recipient, bps);
-    }
-
-    function collectFee() external nonReentrant returns (uint256 amountPaid) {
-        require(msg.sender == feeRecipient, "AgentVault: not fee recipient");
-        if (feeBps == 0) {
-            return 0;
-        }
-
-        uint256 navValue = _nav();
-
-        // First-ever call establishes the baseline instead of charging a fee
-        // on 100% of principal — without this, a cold-start highWaterMark of
-        // 0 would read the initial deposit itself as "profit". This does not
-        // account for deposits made *after* the baseline is set (a deposit
-        // would still look like appreciation) — that is a real gap, but one
-        // that only matters once feeBps is turned on for real, which is an
-        // explicit later decision (plan 3.5), not a phase-1 concern.
-        if (!highWaterMarkInitialized) {
-            highWaterMark = navValue;
-            highWaterMarkInitialized = true;
-            return 0;
-        }
-
-        if (navValue <= highWaterMark) {
-            return 0;
-        }
-
-        uint256 profit = navValue - highWaterMark;
-        uint256 feeValueUsd = (profit * feeBps) / BPS_DENOMINATOR;
-        highWaterMark = navValue;
-
-        if (feeValueUsd == 0) {
-            return 0;
-        }
-
-        amountPaid = _valueToRaw(quoteToken, feeValueUsd);
-        if (amountPaid > 0) {
-            IERC20(quoteToken).safeTransfer(feeRecipient, amountPaid);
-        }
-        emit FeeCollected(feeRecipient, amountPaid, navValue);
-    }
+    // Removed 2026-08-16: a high-water-mark performance fee (`setFeeConfig`,
+    // `collectFee`, MAX_FEE_BPS, feeRecipient, feeBps, highWaterMark,
+    // highWaterMarkInitialized, and two events).
+    //
+    // It was never active — feeBps was 0 in every deployment and nothing set it
+    // — and it could not have served the product's billing either, since
+    // `setFeeConfig` is onlyOwner and the owner is the user, so it could only
+    // ever pay a fee the user configured for themselves. Puno charges per
+    // action in PUNO, through PunoCredits, which never touches this contract.
+    //
+    // It was not free to keep. `collectFee` transferred the quote token out,
+    // making it a second path by which value left a vault, and "withdraw is the
+    // only way out, and it is owner-only" is the single claim this contract
+    // most needs to be able to state without a caveat. It also carried a known
+    // accounting gap: a deposit made after the high-water mark was initialised
+    // read as appreciation and would have been charged as profit.
+    //
+    // The original rationale — ship it dormant so no migration is needed if it
+    // is ever switched on — does not survive the business model it was written
+    // before. If a profit fee ever returns it will be a deliberate decision with
+    // its own design, and vault code is immutable anyway, so existing vaults
+    // could never have been switched on in place.
 
     // ---------------------------------------------------------------------
     // Views
@@ -527,7 +482,14 @@ contract AgentVault is ReentrancyGuard {
         require(notionalUsd <= type(uint192).max, "AgentVault: notional too large to record");
 
         tradeHistoryHead = head;
+        // Both casts below are checked, not assumed: the require above rejects
+        // anything above type(uint192).max, and uint64(block.timestamp) holds
+        // until the year 584942417355. The directive has to sit on the line
+        // immediately above the cast itself — with prose in between it silences
+        // nothing, which is worse than no directive at all because it reads as
+        // if the warning had been dealt with.
         tradeHistory.push(
+            // forge-lint: disable-next-line(unsafe-typecast)
             TradeRecord({ timestamp: uint64(block.timestamp), notionalUsd: uint192(notionalUsd) })
         );
     }

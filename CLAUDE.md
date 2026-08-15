@@ -178,9 +178,14 @@ it there.
 **No Multicall3 on Robinhood Chain testnet** — sequential contract reads in
 `apps/agent/src/chain/vault.ts` are deliberate, not an oversight.
 
-**`AgentVault.setFeeConfig`/`collectFee` are dead code.** They are a high-water-mark profit
-fee in USDG, and `setFeeConfig` is `onlyOwner` where the owner is the _user_. They cannot
-be repurposed for billing.
+**`AgentVault.setFeeConfig`/`collectFee` were removed on 2026-08-16.** They were a
+high-water-mark profit fee in USDG, never active (`feeBps` was 0 everywhere and nothing set it),
+and unusable for billing anyway — `setFeeConfig` was `onlyOwner` where the owner is the _user_.
+Deleted rather than left dormant because `collectFee` transferred the quote token out, making it
+a **second path by which value left a vault**, and "withdraw is the only way out, and it is
+owner-only" is the one claim this contract most needs to state without a caveat. It also carried
+a known gap: a deposit made after the high-water mark was initialised read as appreciation.
+Do not reintroduce it as a billing mechanism; if a profit fee ever returns it is a new design.
 
 **TypeScript runs with `exactOptionalPropertyTypes: true`** — optional props must be typed
 `| undefined`. Also: `and()` returns `SQL | undefined`, which trips this; use `sql\`\`` directly.
