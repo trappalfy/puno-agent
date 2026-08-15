@@ -5,7 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { parseUnits, type Address } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { agentVaultAbi, vaultFactoryAbi, getNetwork } from "@puno/shared";
+import {
+  agentVaultAbi,
+  vaultFactoryAbi,
+  getNetwork,
+  getAssets,
+  EQUITY_STALENESS_SECONDS,
+  type TradableAsset,
+} from "@puno/shared";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
@@ -186,13 +193,44 @@ const PREVIEW_VAULT = "0x1111111111111111111111111111111111111111" as Address;
 const PREVIEW_AGENT = "0x2222222222222222222222222222222222222222" as Address;
 const PREVIEW_KEY = `0x${"ab".repeat(32)}`;
 
-/** The four wallet signatures, in the order handleDeploy fires them. */
-const DEPLOY_STEPS = [
-  { title: "Deploy the vault", call: "factory.createVault()" },
-  { title: "Set the price feed", call: "vault.setPriceFeed()" },
-  { title: "Write the risk limits", call: "vault.setPolicy()" },
-  { title: "Arm the agent key", call: "vault.setAgent()" },
-] as const;
+/** Everything this network can trade, pinned and verified — see assets.ts. */
+const ASSETS = getAssets(network.key);
+
+/**
+ * The router the vault will allowlist.
+ *
+ * B1a. This used to be `network.routers.oneInch` unconditionally, which on
+ * mainnet allowlisted the 1inch aggregator — a router `UniswapV3Adapter`
+ * refuses to build calldata for, deliberately, since an adapter free to pick
+ * its own target would be routing around the allowlist. The vault and the
+ * agent have to agree on the venue, and the agent's venue is SwapRouter02.
+ *
+ * On testnet `uniswapV3` is null and `routers.oneInch` holds the deployed
+ * MockRouter, so this resolves to the mock exactly as before.
+ */
+const TRADE_ROUTER: Address = network.uniswapV3?.swapRouter02 ?? network.routers.oneInch;
+
+/**
+ * The wallet signatures, in the order handleDeploy fires them.
+ *
+ * No longer a constant four: every allowlisted equity needs its own
+ * `setPriceFeed`, because `_nav()` and `_minAcceptableOut()` both read a feed
+ * per token and revert without one. Naming each ticker in the ledger is the
+ * point — a user asked to sign nine times deserves to see that six of them are
+ * "wire up AAPL", not an unexplained queue of prompts.
+ */
+function deploySteps(equities: TradableAsset[]) {
+  return [
+    { title: "Deploy the vault", call: "factory.createVault()" },
+    { title: `Set the ${ASSETS.quote.ticker} price feed`, call: "vault.setPriceFeed()" },
+    ...equities.map((a) => ({
+      title: `Set the ${a.ticker} price feed`,
+      call: `vault.setPriceFeed() · ${a.ticker}`,
+    })),
+    { title: "Write the risk limits", call: "vault.setPolicy()" },
+    { title: "Arm the agent key", call: "vault.setAgent()" },
+  ];
+}
 
 // useSearchParams() needs a Suspense boundary above it, or `next build` fails
 // the whole route with a prerender error.
@@ -225,8 +263,19 @@ function NewAgentWizard() {
     null,
   );
 
+  // Which equities this vault will be allowed to trade. All of them by default:
+  // a vault that allowlists nothing is exactly the bug B2 describes, and the
+  // agent can only ever trade a subset of what it is permitted anyway. Each one
+  // costs a signature, which is why they are visible and unselectable rather
+  // than silently appended.
+  const [tickers, setTickers] = useState<string[]>(ASSETS.equities.map((a) => a.ticker));
+  const chosen = ASSETS.equities.filter((a) => tickers.includes(a.ticker));
+
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const toggleTicker = (ticker: string) =>
+    setTickers((t) => (t.includes(ticker) ? t.filter((x) => x !== ticker) : [...t, ticker]));
 
   const applyPreset = (name: PresetName) => setForm((f) => ({ ...f, ...PRESETS[name] }));
 
@@ -287,14 +336,36 @@ function NewAgentWizard() {
       stage = 2;
       setDoneSteps(2);
 
+      // B2. Without a feed per equity the vault cannot value the position:
+      // `_nav()` and `_minAcceptableOut()` both read `priceFeeds[token]` and
+      // revert when it is unset, so allowlisting a token without wiring its
+      // oracle would produce a vault that accepts the ticker and then reverts
+      // every trade in it.
+      //
+      // Staleness is the equity window, never the quote window. They are
+      // different numbers for a measured reason (CLAUDE.md), and the equity one
+      // has its own caveat worth knowing before this is tuned:
+      // EQUITY-FEED-HOURS-2026-08-15.md.
+      for (const asset of chosen) {
+        const assetFeedTx = await writeContractAsync({
+          address: vault,
+          abi: agentVaultAbi,
+          functionName: "setPriceFeed",
+          args: [asset.token, asset.feed, EQUITY_STALENESS_SECONDS],
+        });
+        await publicClient.waitForTransactionReceipt({ hash: assetFeedTx });
+        stage += 1;
+        setDoneSteps(stage);
+      }
+
       const policyTx = await writeContractAsync({
         address: vault,
         abi: agentVaultAbi,
         functionName: "setPolicy",
         args: [
           {
-            allowedRouters: [network.routers.oneInch],
-            allowedTokens: [quoteToken],
+            allowedRouters: [TRADE_ROUTER],
+            allowedTokens: [quoteToken, ...chosen.map((a) => a.token)],
             maxNotionalPerTrade: parseUnits(form.maxNotionalPerTradeUsd, 18),
             maxDailyNotional: parseUnits(form.maxDailyNotionalUsd, 18),
             maxPositionBps: BigInt(pctToBps(form.maxPositionPct)),
@@ -304,14 +375,15 @@ function NewAgentWizard() {
         ],
       });
       await publicClient.waitForTransactionReceipt({ hash: policyTx });
-      stage = 3;
-      setDoneSteps(3);
+      // Relative, not absolute: the equity loop above already advanced `stage`
+      // by one per feed, so hardcoding 3 here would rewind the ledger and show
+      // completed steps as pending again.
+      stage += 1;
+      setDoneSteps(stage);
 
       const agentPrivateKey = generatePrivateKey();
       const agentAccount = privateKeyToAccount(agentPrivateKey);
-      const expiry = BigInt(
-        Math.floor(Date.now() / 1000) + 60 * 60 * 24 * AGENT_KEY_DAYS,
-      );
+      const expiry = BigInt(Math.floor(Date.now() / 1000) + 60 * 60 * 24 * AGENT_KEY_DAYS);
       const agentTx = await writeContractAsync({
         address: vault,
         abi: agentVaultAbi,
@@ -319,8 +391,8 @@ function NewAgentWizard() {
         args: [agentAccount.address, expiry],
       });
       await publicClient.waitForTransactionReceipt({ hash: agentTx });
-      stage = 4;
-      setDoneSteps(4);
+      stage += 1;
+      setDoneSteps(stage);
 
       const res = await fetch("/api/agents/create", {
         method: "POST",
@@ -342,7 +414,8 @@ function NewAgentWizard() {
           },
         }),
       });
-      if (!res.ok) throw new Error(`Vault is live on-chain, but recording it failed (${res.status}).`);
+      if (!res.ok)
+        throw new Error(`Vault is live on-chain, but recording it failed (${res.status}).`);
 
       setResult({ agentAddress: agentAccount.address, agentPrivateKey });
       setStep("done");
@@ -354,7 +427,13 @@ function NewAgentWizard() {
   }
 
   if (preview === "deploying") {
-    return <DeployLedger doneSteps={2} vaultAddress={PREVIEW_VAULT} />;
+    return (
+      <DeployLedger
+        steps={deploySteps(ASSETS.equities)}
+        doneSteps={2}
+        vaultAddress={PREVIEW_VAULT}
+      />
+    );
   }
 
   if (preview === "done") {
@@ -400,7 +479,9 @@ function NewAgentWizard() {
   }
 
   if (step === "deploying") {
-    return <DeployLedger doneSteps={doneSteps} vaultAddress={vaultAddress} />;
+    return (
+      <DeployLedger steps={deploySteps(chosen)} doneSteps={doneSteps} vaultAddress={vaultAddress} />
+    );
   }
 
   return (
@@ -412,8 +493,8 @@ function NewAgentWizard() {
             Commission an agent
           </h1>
           <p className="mt-[var(--spacing-8)] max-w-xl text-app-body text-white-muted">
-            Set the limits it trades under. They are written into the vault contract, which
-            rejects any trade outside them — including trades you later ask for.
+            Set the limits it trades under. They are written into the vault contract, which rejects
+            any trade outside them — including trades you later ask for.
           </p>
         </div>
         <NetworkBadge network={network.key} />
@@ -608,6 +689,51 @@ function NewAgentWizard() {
               error={errors.quoteFeedStalenessHours}
             />
           </Fieldset>
+
+          {/* B2. Before this, the vault allowlisted the quote token and nothing
+              else, so an agent created here rejected every equity the model
+              proposed — "token not in vault allowlist" — and could never trade
+              anything at all. */}
+          <Fieldset
+            title="What it may trade"
+            note={`${chosen.length} selected`}
+            body="Each one is written into the vault's allowlist and wired to its own Chainlink feed. Both are on-chain limits: the agent cannot touch a token that is not here, whatever it decides."
+          >
+            <div className="flex flex-col gap-[var(--spacing-8)]">
+              {ASSETS.equities.map((asset) => {
+                const on = tickers.includes(asset.ticker);
+                return (
+                  <label
+                    key={asset.ticker}
+                    className="flex cursor-pointer items-center gap-[var(--spacing-12)] rounded-[var(--radius-tags)] px-[var(--spacing-8)] py-[var(--spacing-8)] transition-colors hover:bg-row-hover"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => toggleTicker(asset.ticker)}
+                      className="size-4 shrink-0 accent-lime-phosphor"
+                    />
+                    <span className="text-app-body font-semibold text-white">{asset.ticker}</span>
+                    {/* The verified on-chain name, not a label we chose.
+                        Symbol lookup is not identity on this chain — loxAAPL,
+                        AAPLCAT and two different loxTSLA all exist — so showing
+                        what the contract actually calls itself is the check a
+                        user can make with their own eyes. */}
+                    <span className="text-app-body-sm text-white-muted">{asset.tokenName}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {chosen.length === 0 && (
+              <p className="mt-[var(--spacing-12)] text-app-body-sm text-signal-amber">
+                With nothing selected the agent can hold only {ASSETS.quote.ticker} and will decline
+                every trade it proposes.
+              </p>
+            )}
+            <p className="mt-[var(--spacing-12)] text-app-body-sm text-white-muted">
+              Each one adds a wallet signature — {deploySteps(chosen).length} in total.
+            </p>
+          </Fieldset>
         </div>
 
         <Mandate
@@ -796,9 +922,11 @@ function Gate({
  * the completed ones on screen.
  */
 function DeployLedger({
+  steps,
   doneSteps,
   vaultAddress,
 }: {
+  steps: { title: string; call: string }[];
   doneSteps: number;
   vaultAddress: Address | null;
 }) {
@@ -815,7 +943,7 @@ function DeployLedger({
 
       <Card className="mt-[var(--spacing-24)]">
         <ol className="flex flex-col gap-[var(--spacing-16)]">
-          {DEPLOY_STEPS.map((s, i) => {
+          {steps.map((s, i) => {
             const state = i < doneSteps ? "done" : i === doneSteps ? "active" : "pending";
             return (
               <li key={s.call} className="flex items-start gap-[var(--spacing-12)]">
@@ -889,8 +1017,8 @@ function KeyHandover({
         Your vault is live
       </h1>
       <p className="mt-[var(--spacing-8)] text-app-body text-white-muted">
-        The limits are on-chain and the agent key is armed. It trades in dry-run until you turn
-        that off.
+        The limits are on-chain and the agent key is armed. It trades in dry-run until you turn that
+        off.
       </p>
 
       <Card className="mt-[var(--spacing-24)] flex flex-col gap-[var(--spacing-12)]">
