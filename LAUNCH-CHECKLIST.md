@@ -18,18 +18,18 @@ that get skipped under time pressure:
 
 ### Mainnet blockers (code, not configuration)
 
-| # | Item | Where | State |
-|---|---|---|---|
-| **B1** | **Real router integration.** `simulate.ts` encodes `MockRouter.swap` calldata, which exists only on chain 46630. On mainnet the wizard writes the real 1inch router into the policy, so every trade would revert. Fails *safe* (the `eth_call` catches it, no gas burned) but the agent cannot trade at all. | `apps/agent/src/loop/simulate.ts` | **Open — the single gate on mainnet** |
-| **B2** | **Wizard allowlists only the quote token.** `setPolicy` gets `allowedTokens: [quoteToken]` and `setPriceFeed` is called for the quote alone, so a vault created through the UI can never trade an equity. Real Chainlink feed addresses have never been put into config. | `apps/web/src/app/app/agents/new/page.tsx`, `packages/shared/src/network/config.ts` | **Open** |
-| **B3** | **PUNO does not exist on mainnet.** `NETWORKS.mainnet.punoToken`/`.punoCredits` are `null`, so `runDepositWatcher` returns immediately. Nothing to fix in code — a sequencing fact. | `apps/agent/src/indexer/watcher.ts` | Blocked on the token itself |
+| #      | Item                                                                                                                                                                                                                                                                                                                               | Where                                                                               | State                                       |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------- |
+| **B1** | **Real router integration.** Step 1 done: the hardcoded `MockRouter.swap` encoding is behind a `RouterAdapter` seam, mainnet now refuses with a diagnosis instead of emitting mock bytes for a real router. **Step 2 open** — the Uniswap V3 adapter itself (`QuoterV2` tier selection, `SwapRouter02.exactInputSingle` calldata). | `apps/agent/src/routing/`, `apps/agent/src/loop/simulate.ts`                        | **Open — still the single gate on mainnet** |
+| **B2** | **Wizard allowlists only the quote token.** `setPolicy` gets `allowedTokens: [quoteToken]` and `setPriceFeed` is called for the quote alone, so a vault created through the UI can never trade an equity. Real Chainlink feed addresses have never been put into config.                                                           | `apps/web/src/app/app/agents/new/page.tsx`, `packages/shared/src/network/config.ts` | **Open**                                    |
+| **B3** | **PUNO does not exist on mainnet.** `NETWORKS.mainnet.punoToken`/`.punoCredits` are `null`, so `runDepositWatcher` returns immediately. Nothing to fix in code — a sequencing fact.                                                                                                                                                | `apps/agent/src/indexer/watcher.ts`                                                 | Blocked on the token itself                 |
 
 **B1 decision already taken (do not re-litigate):** Uniswap V3 directly first, 1inch later.
 Addresses, liquidity and a live quote are in `PHASE4-ROUTING-2026-08-14.md`. Two traps recorded
 there: **symbol lookup is not identity** (`loxAAPL`, `AAPLCAT`, two different `loxTSLA` all
 exist), and periphery contracts must be resolved by `factory()`, never by name.
 
-B1 needs a real *quote*, not just real calldata: `MockRouter.swap` takes `amountOut` as an exact
+B1 needs a real _quote_, not just real calldata: `MockRouter.swap` takes `amountOut` as an exact
 argument and always fills at the modelled price, so `risk.ts`'s sizing has never met a venue that
 can fill differently.
 
@@ -58,7 +58,7 @@ can fill differently.
 
 - [ ] **Re-measure the screen cost.** D1's fix added the decision summary to the ~2,885-token
       screen prompt. If it now clears Haiku's 4,096-token cache minimum, caching engages and the
-      Haiku cache gap closes itself. Needs a tick against a *populated* decision history, not a
+      Haiku cache gap closes itself. Needs a tick against a _populated_ decision history, not a
       synthetic prompt.
 - [ ] **Haiku cache gap** — measured at 0 cache tokens across all five screen calls; ~$0.0018 of
       the $0.005 screen margin wasted. Either pad the prompt past the minimum or accept it
@@ -79,7 +79,7 @@ can fill differently.
 ### Copy that is currently untrue
 
 - [ ] **`Today · 1,842 ticks routed`** in `apps/site/src/components/sections/CostRouting.tsx` is
-      invented and presented as live, while `ConsoleMock` right next to it *is* labelled
+      invented and presented as live, while `ConsoleMock` right next to it _is_ labelled
       "Illustrative". For a product pitched as "proof, not promises", fix or label it.
 
 ### Housekeeping
@@ -116,16 +116,16 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 
 ### 2. Static gates
 
-| Command | Expected |
-|---|---|
-| `pnpm -r typecheck` | 4/4 projects clean |
-| `pnpm lint` | clean |
-| `pnpm test` | **116** — shared 51, agent 59, web 6 |
-| `forge test -vv` (from `contracts/`) | **74/74** |
-| `pnpm -r build` | both apps build; `web` emits 17 routes |
+| Command                              | Expected                               |
+| ------------------------------------ | -------------------------------------- |
+| `pnpm -r typecheck`                  | 4/4 projects clean                     |
+| `pnpm lint`                          | clean                                  |
+| `pnpm test`                          | **123** — shared 51, agent 66, web 6   |
+| `forge test -vv` (from `contracts/`) | **74/74**                              |
+| `pnpm -r build`                      | both apps build; `web` emits 17 routes |
 
-If a count is *lower* than the number above, tests were deleted or skipped — investigate before
-proceeding. If *higher*, update this file.
+If a count is _lower_ than the number above, tests were deleted or skipped — investigate before
+proceeding. If _higher_, update this file.
 
 ### 3. Routes actually serve
 
@@ -167,9 +167,7 @@ addresses on copy. Generating an address safely is not enough; it must be checke
 of use**.
 
 - [ ] Every address in a deploy command read back visually before sending.
-- [ ] **Stop immediately** if either of these appears in any transaction:
-      - old deployer `0x81FDDF1dAD8ED65fA60bF1F4B89A3FA5F5B829D2`
-      - attacker `0xeB73130796f89e2df501526663e1cD114eAC20Ab`
+- [ ] **Stop immediately** if either of these appears in any transaction: - old deployer `0x81FDDF1dAD8ED65fA60bF1F4B89A3FA5F5B829D2` - attacker `0xeB73130796f89e2df501526663e1cD114eAC20Ab`
 - [ ] Current, post-reinstall: deployer `0x7b22e721AeE49C4306699a5E77243372FA6afBDa`,
       agent `0x389AA9c066854a1e1A62a9F49910760a8D010adD`.
 - [ ] **Never print a private key.** Verify presence by length only (`set, len 66`). Derive

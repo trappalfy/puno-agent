@@ -79,6 +79,7 @@ async function simulateExecuteAndPersist(params: {
     return;
   }
 
+  console.log(`  [route] ${sim.route}`);
   const exec = await executeTrade(params.vault, params.trade, sim.swapCalldata, params.paper);
   if (exec.txHash) {
     console.log(`  [execute] ${exec.status}: ${config.network.explorerUrl}/tx/${exec.txHash}`);
@@ -89,7 +90,10 @@ async function simulateExecuteAndPersist(params: {
     tokenIn: params.trade.tokenIn,
     tokenOut: params.trade.tokenOut,
     amountIn: params.trade.amountIn,
-    amountOut: params.trade.amountOut,
+    // The venue's number, not risk.ts's oracle estimate. Identical under the
+    // mock; once a real adapter quotes, the row should record what was actually
+    // expected to arrive rather than what the oracle implied it would.
+    amountOut: sim.amountOut,
     minOut: params.trade.minOut,
     router: params.trade.router,
     notionalUsd1e18: params.trade.notionalUsd1e18,
@@ -351,10 +355,7 @@ export async function runTick(agentId: string, opts: TickOptions = {}): Promise<
     recentDecisionsSummary: formatRecentDecisions(await getRecentDecisions(agentId)),
   };
 
-  const budgetCheckL1 = await checkBalanceBeforeCall(
-    agent.accountId,
-    priceFor("screen", billing),
-  );
+  const budgetCheckL1 = await checkBalanceBeforeCall(agent.accountId, priceFor("screen", billing));
   const rateLimitCheck = await checkRateLimitBeforeCall(agentId, limits?.maxCallsPerHour ?? 6);
   if (!budgetCheckL1.allowed || !rateLimitCheck.allowed) {
     const reason = !budgetCheckL1.allowed ? budgetCheckL1.reason : rateLimitCheck.reason;
