@@ -4,7 +4,6 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { parseUnits, type Address } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   agentVaultAbi,
   vaultFactoryAbi,
@@ -191,7 +190,6 @@ function validate(f: FormState): Errors {
 const PREVIEW_ENABLED = process.env.NODE_ENV === "development";
 const PREVIEW_VAULT = "0x1111111111111111111111111111111111111111" as Address;
 const PREVIEW_AGENT = "0x2222222222222222222222222222222222222222" as Address;
-const PREVIEW_KEY = `0x${"ab".repeat(32)}`;
 
 /** Everything this network can trade, pinned and verified — see assets.ts. */
 const ASSETS = getAssets(network.key);
@@ -209,6 +207,16 @@ const ASSETS = getAssets(network.key);
  * MockRouter, so this resolves to the mock exactly as before.
  */
 const TRADE_ROUTER: Address = network.uniswapV3?.swapRouter02 ?? network.routers.oneInch;
+
+/**
+ * The address every vault created here is armed with: Puno's worker.
+ *
+ * Public by construction — the private half lives only in the worker's env, and
+ * the worker refuses to start if the two disagree. See the `serviceAgent` note
+ * in packages/shared/src/network/config.ts for why this is one shared address
+ * rather than a key per vault.
+ */
+const SERVICE_AGENT = network.serviceAgent;
 
 /**
  * The wallet signatures, in the order handleDeploy fires them.
@@ -259,9 +267,10 @@ function NewAgentWizard() {
   // has an address to show — otherwise the user has paid gas for a vault the
   // UI has forgotten about, and would deploy a second one on retry.
   const [vaultAddress, setVaultAddress] = useState<Address | null>(null);
-  const [result, setResult] = useState<{ agentAddress: Address; agentPrivateKey: string } | null>(
-    null,
-  );
+  // No private key in here any more. It used to carry one so the done screen
+  // could show it; the vault is armed with the worker's address now, so there is
+  // nothing generated to hand over and nothing to lose by closing the tab.
+  const [result, setResult] = useState<{ agentAddress: Address } | null>(null);
 
   // Which equities this vault will be allowed to trade. All of them by default:
   // a vault that allowlists nothing is exactly the bug B2 describes, and the
@@ -293,7 +302,7 @@ function NewAgentWizard() {
     ADDRESS_RE.test(form.quoteFeedAddress.trim());
 
   async function handleDeploy() {
-    if (!address || !publicClient || !network.vaultFactory) return;
+    if (!address || !publicClient || !network.vaultFactory || !SERVICE_AGENT) return;
     setErrorMsg(null);
     setFailedAt(null);
     setDoneSteps(0);
@@ -388,14 +397,26 @@ function NewAgentWizard() {
       stage += 1;
       setDoneSteps(stage);
 
-      const agentPrivateKey = generatePrivateKey();
-      const agentAccount = privateKeyToAccount(agentPrivateKey);
+      // Arms Puno's worker, not a freshly generated key.
+      //
+      // This page used to call generatePrivateKey() in the browser, show the
+      // result to the user and tell them to run the worker themselves. That is a
+      // self-hosted tool, and it does not describe this product: the worker ticks
+      // every live agent from one process holding one key, so a vault armed with
+      // a key we do not have is a vault we can never trade — every executeTrade
+      // reverting on `msg.sender == agent`, after the user has already paid for
+      // the decision that produced it.
+      //
+      // Nothing about custody changes here, because there was never anything to
+      // custody: the agent may only swap allowlisted tokens through allowlisted
+      // routers inside the policy signed two steps ago, and withdraw takes the
+      // owner's signature. Revoking is the owner calling setAgent themselves.
       const expiry = BigInt(Math.floor(Date.now() / 1000) + 60 * 60 * 24 * AGENT_KEY_DAYS);
       const agentTx = await writeContractAsync({
         address: vault,
         abi: agentVaultAbi,
         functionName: "setAgent",
-        args: [agentAccount.address, expiry],
+        args: [SERVICE_AGENT, expiry],
       });
       await publicClient.waitForTransactionReceipt({ hash: agentTx });
       stage += 1;
@@ -411,7 +432,7 @@ function NewAgentWizard() {
           quoteToken,
           network: network.key,
           agentName: form.agentName,
-          agentAddress: agentAccount.address,
+          agentAddress: SERVICE_AGENT,
           dryRun: paper,
           offChainLimits: {
             stopLossBps: form.stopLossPct ? pctToBps(form.stopLossPct) : null,
@@ -425,7 +446,7 @@ function NewAgentWizard() {
       if (!res.ok)
         throw new Error(`Vault is live on-chain, but recording it failed (${res.status}).`);
 
-      setResult({ agentAddress: agentAccount.address, agentPrivateKey });
+      setResult({ agentAddress: SERVICE_AGENT });
       setStep("done");
     } catch (err) {
       setFailedAt(stage);
@@ -446,10 +467,10 @@ function NewAgentWizard() {
 
   if (preview === "done") {
     return (
-      <KeyHandover
+      <AgentArmed
         vaultAddress={PREVIEW_VAULT}
         agentAddress={PREVIEW_AGENT}
-        agentPrivateKey={PREVIEW_KEY}
+        paper
         onDone={() => router.push("/app")}
       />
     );
@@ -475,12 +496,24 @@ function NewAgentWizard() {
     );
   }
 
+  // Same shape as the factory gate above, and for the same reason: a vault
+  // armed with nothing is worse than no vault, because the user pays for every
+  // signature first and only then finds out nothing can trade it.
+  if (!preview && !SERVICE_AGENT) {
+    return (
+      <Gate
+        title={`No worker on ${network.name} yet`}
+        body={`Vaults are armed with Puno's worker address, and none is configured for ${network.name} (chain ${network.chainId}). Creating one here would deploy a vault that nothing can trade.`}
+      />
+    );
+  }
+
   if (step === "done" && result && vaultAddress) {
     return (
-      <KeyHandover
+      <AgentArmed
         vaultAddress={vaultAddress}
         agentAddress={result.agentAddress}
-        agentPrivateKey={result.agentPrivateKey}
+        paper={paper}
         onDone={() => router.push("/app")}
       />
     );
@@ -1067,25 +1100,31 @@ function DeployLedger({
 /* ------------------------------------------------------------------ */
 
 /**
- * The private key is generated in the browser and never sent anywhere, which
- * means this screen is the only time it will ever exist for the user. It is
- * gated behind an explicit acknowledgement rather than a plain "continue" —
- * navigating away without copying it strands the vault's agent slot.
+ * Replaces KeyHandover, which showed a freshly generated private key, warned
+ * that it could never be shown again, and printed a .env snippet plus a
+ * `pnpm --filter @puno/agent dev` command.
+ *
+ * That screen described a self-hosted tool. It also could not work: the hosted
+ * worker holds one key and signs for every vault, so a vault armed with a key
+ * only the user had was a vault Puno could never trade. There is nothing to hand
+ * over now, no secret to lose by closing the tab, and so no acknowledgement
+ * checkbox in front of the button — the gate existed to stop someone navigating
+ * away from an unrecoverable secret, and there isn't one.
+ *
+ * What replaces it is the part that was missing: what the armed address may do,
+ * and how to take it back.
  */
-function KeyHandover({
+function AgentArmed({
   vaultAddress,
   agentAddress,
-  agentPrivateKey,
+  paper,
   onDone,
 }: {
   vaultAddress: Address;
   agentAddress: Address;
-  agentPrivateKey: string;
+  paper: boolean;
   onDone: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
-
   return (
     <div className="mx-auto max-w-2xl py-[var(--spacing-48)]">
       <SectionEyebrow>Agent armed</SectionEyebrow>
@@ -1093,8 +1132,9 @@ function KeyHandover({
         Your vault is live
       </h1>
       <p className="mt-[var(--spacing-8)] text-app-body text-white-muted">
-        The limits are on-chain and the agent key is armed. It trades in dry-run until you turn that
-        off.
+        {paper
+          ? "The limits are on-chain and Puno's worker is armed. It trades on paper until you switch it to live from the agent's page."
+          : "The limits are on-chain and Puno's worker is armed. It will trade with the vault's funds from its next tick."}
       </p>
 
       <Card className="mt-[var(--spacing-24)] flex flex-col gap-[var(--spacing-12)]">
@@ -1103,63 +1143,51 @@ function KeyHandover({
           <AddressChip address={vaultAddress} explorerBaseUrl={network.explorerUrl} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-app-body-sm text-white-muted">Agent address</span>
+          <span className="text-app-body-sm text-white-muted">Armed agent</span>
           <AddressChip address={agentAddress} explorerBaseUrl={network.explorerUrl} />
         </div>
       </Card>
 
-      <div className="mt-[var(--spacing-16)] rounded-[var(--radius-body-blocks)] border border-signal-amber bg-signal-amber/10 p-[var(--spacing-16)]">
-        <div className="flex flex-wrap items-center justify-between gap-[var(--spacing-8)]">
-          <p className="text-app-body-sm font-semibold text-signal-amber">
-            Copy the agent key now — it is not stored and cannot be shown again
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard.writeText(agentPrivateKey);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1600);
-            }}
-            className="rounded-[var(--radius-pills)] border border-signal-amber px-[var(--spacing-12)] py-[var(--spacing-4)] text-num-sm text-signal-amber font-jetbrains-mono transition-colors hover:bg-signal-amber hover:text-vault-floor"
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-        <code className="mt-[var(--spacing-12)] block break-all rounded-[var(--radius-tags)] bg-vault-floor p-[var(--spacing-12)] text-num-sm text-white font-jetbrains-mono">
-          {agentPrivateKey}
-        </code>
-      </div>
+      <Card className="mt-[var(--spacing-16)]">
+        <h2 className="text-app-heading-sm font-denim-ink font-semibold text-white">
+          What that address can do
+        </h2>
+        {/* Stated as limits rather than as reassurance, because each line is a
+            check in AgentVault that reverts, not a policy we promise to keep. */}
+        <ul className="mt-[var(--spacing-12)] flex flex-col gap-[var(--spacing-8)] text-app-body-sm text-white-muted">
+          <li>
+            <span className="text-white">It cannot withdraw.</span> Moving funds out takes a
+            signature from the wallet that deployed this vault. No other function will do it.
+          </li>
+          <li>
+            <span className="text-white">It cannot trade outside your limits.</span> The per-trade
+            cap, daily cap, position share and slippage bound are on-chain — the contract reverts a
+            trade that breaks one, whoever proposed it.
+          </li>
+          <li>
+            <span className="text-white">It cannot touch anything unlisted.</span> Only the tokens
+            and the router you allowlisted, and only at the price its Chainlink feed says.
+          </li>
+          <li>
+            <span className="text-white">It stops on its own.</span> The grant expires after{" "}
+            {AGENT_KEY_DAYS} days unless you re-arm it.
+          </li>
+        </ul>
+      </Card>
 
       <Card className="mt-[var(--spacing-16)]">
         <h2 className="text-app-heading-sm font-denim-ink font-semibold text-white">
-          Start the worker
+          Taking it back
         </h2>
         <p className="mt-[var(--spacing-8)] text-app-body-sm text-white-muted">
-          Put both values in the worker&apos;s <code>.env</code>, then run it. See{" "}
-          <code>apps/agent/README.md</code>.
+          Pause the vault from the agent&apos;s page to stop trading immediately, or call{" "}
+          <code>setAgent</code> on the vault yourself to revoke this address outright. Both are
+          owner-only and neither needs us.
         </p>
-        <pre className="mt-[var(--spacing-12)] overflow-x-auto rounded-[var(--radius-tags)] bg-forest-canopy p-[var(--spacing-12)] text-num-sm text-white-muted font-jetbrains-mono">
-          {`AGENT_PRIVATE_KEY=<the key above>
-VAULT_ADDRESS=${vaultAddress}
-
-pnpm --filter @puno/agent dev`}
-        </pre>
       </Card>
 
-      <label className="mt-[var(--spacing-24)] flex items-center gap-[var(--spacing-12)]">
-        <input
-          type="checkbox"
-          checked={saved}
-          onChange={(e) => setSaved(e.target.checked)}
-          className="size-4 accent-lime-phosphor"
-        />
-        <span className="text-app-body-sm text-white-muted">
-          I have saved the agent key somewhere safe
-        </span>
-      </label>
-
-      <div className="mt-[var(--spacing-16)]">
-        <Button variant="primary" disabled={!saved} onClick={onDone}>
+      <div className="mt-[var(--spacing-24)]">
+        <Button variant="primary" onClick={onDone}>
           Go to dashboard
         </Button>
       </div>

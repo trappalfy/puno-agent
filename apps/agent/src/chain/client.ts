@@ -29,6 +29,17 @@ export function getAgentAccount() {
   return privateKeyToAccount(config.agentPrivateKey as `0x${string}`);
 }
 
+/// The worker's public address, or null when it holds no key.
+///
+/// Separate from `getAgentAccount` because the boot check needs to *ask*
+/// whether the key matches what vaults are armed with, and a getter that throws
+/// on a missing key cannot answer that question in paper mode — where a missing
+/// key is a normal state rather than a fault.
+export function getAgentAddress(): Address | null {
+  if (!config.agentPrivateKey) return null;
+  return privateKeyToAccount(config.agentPrivateKey as `0x${string}`).address;
+}
+
 export function getWalletClient() {
   return createWalletClient({
     account: getAgentAccount(),

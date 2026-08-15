@@ -5,6 +5,8 @@ import { runTick } from "./loop/tick.js";
 import { runDepositWatcher } from "./billing/watcher.js";
 import { runTrialQueue } from "./trial/runner.js";
 import { refreshDemoFeeds } from "./testnet/price-keeper.js";
+import { getAgentAddress } from "./chain/client.js";
+import { serviceAgentMismatch } from "./chain/serviceAgent.js";
 import { config } from "./config.js";
 
 async function tickAllAgents(): Promise<void> {
@@ -76,6 +78,23 @@ async function main(): Promise<void> {
       ? "DRY_RUN=true — the full pipeline runs (including real LLM calls) but no transaction is ever broadcast."
       : "DRY_RUN=false — LIVE mode: accepted trades WILL be sent to the chain.",
   );
+
+  // Before anything else touches the chain. Every vault this network creates is
+  // armed with `serviceAgent`, so a worker holding a different key produces the
+  // most expensive possible failure: it screens, decides, bills the user for the
+  // decision, passes risk, and reverts on chain with "not authorized" — once per
+  // agent, per tick, until someone notices. Refusing to boot costs a restart.
+  const mismatch = serviceAgentMismatch(config.network.serviceAgent, getAgentAddress(), {
+    dryRun: config.dryRun,
+  });
+  if (mismatch) {
+    throw new Error(`Agent key does not match this network's service agent. ${mismatch}`);
+  }
+  if (config.network.serviceAgent) {
+    // The address only. Printing it is what makes the clipboard rule checkable
+    // at the moment of use — see the security incident in CLAUDE.md.
+    console.log(`Signing as ${config.network.serviceAgent} — the address vaults are armed with.`);
+  }
 
   if (config.network.punoCredits) {
     console.log(`Deposit watcher enabled — PunoCredits at ${config.network.punoCredits}`);

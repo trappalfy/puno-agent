@@ -35,6 +35,49 @@ B1 needs a real _quote_, not just real calldata: `MockRouter.swap` takes `amount
 argument and always fills at the modelled price, so `risk.ts`'s sizing has never met a venue that
 can fill differently.
 
+### B0 — the hosted worker could not sign for a single user vault
+
+**Found and closed 2026-08-15. It was not in this file, and it outranked everything that was.**
+
+Four facts that could not all be true at once:
+
+1. The wizard called `generatePrivateKey()` **in the browser**, showed the key to the user, and
+   printed a `.env` snippet plus `pnpm --filter @puno/agent dev`. The server never received it and
+   the schema had nowhere to put it.
+2. `apps/agent/src/chain/client.ts` builds one signer from one process-wide `AGENT_PRIVATE_KEY`.
+3. `main.ts`'s `tickAllAgents()` ticks **every** live agent in the database.
+4. `AgentVault.sol:292` requires `msg.sender == agent`.
+
+So a hosted worker walked every agent while able to sign for exactly one vault. For every other
+one, the tick would screen, decide, **bill the user $0.51**, pass risk, and revert on chain with
+"not authorized" — per agent, per tick. The product could not have executed a trade for a real
+user on any network. The live trade of 2026-08-14 went through a seeded agent, which is why it
+never surfaced. Same class as the `dry_run` hole: a path that simply did not exist.
+
+Two models were in the tree at once — a hosted service (our ledger, our indexer, our Anthropic
+key, one shared tick loop) and a self-hosted tool (that final screen). **Resolved in favour of
+hosted**, with a shared service key:
+
+- `NetworkConfig.serviceAgent` is the public address the worker signs with. The wizard arms
+  vaults with it, and refuses to create an agent on a network where it is null — the same shape
+  as the `vaultFactory` gate, because a vault nothing can trade is worse than no vault when the
+  user has already paid for every signature.
+- Custody did not change, because there was nothing to custody. The agent may only swap
+  allowlisted tokens through allowlisted routers inside the owner's policy; `withdraw` takes the
+  owner's signature. The owner revokes with `setAgent`, and the grant expires regardless.
+- `apps/agent/src/chain/serviceAgent.ts` refuses to boot the worker when its key does not derive
+  to the configured address, in paper mode too — discovering it at the moment someone goes live
+  is the expensive version. 6 tests.
+
+**Verified by execution 2026-08-15**, all three sources agreeing: the `.env` key derives to
+`0x389AA9c066854a1e1A62a9F49910760a8D010adD`, `NETWORKS.testnet.serviceAgent` holds it, and
+`cast call <demoVault> "agent()"` returns it.
+
+- [ ] **Mainnet `serviceAgent` is null and must stay null until a dedicated key exists.** Do not
+      copy the testnet address down: that key has signed on a throwaway chain and lived in a
+      throwaway `.env`. Generate a fresh one, put its address in `config.ts`, and let the worker's
+      boot check prove the pair matches.
+
 ### Security and ownership — must happen before mainnet money
 
 - [ ] **Transfer `PunoCredits` ownership off the hot `.env` key.** Whoever owns it can move the
@@ -164,7 +207,7 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | `pnpm -r typecheck`                  | 4/4 projects clean                     |
 | `pnpm lint`                          | clean                                  |
 | `pnpm format:check`                  | clean — a real signal since 2026-08-15 |
-| `pnpm test`                          | **150** — shared 63, agent 74, web 13  |
+| `pnpm test`                          | **156** — shared 63, agent 80, web 13  |
 | `forge test -vv` (from `contracts/`) | **88/88**                              |
 | `pnpm -r build`                      | both apps build; `web` emits 20 routes |
 
@@ -240,8 +283,31 @@ PowerShell here-strings break on `"` in commit messages. Write the message to a 
 **Testnet: yes** — deployed, billing proven on chain, one real trade executed, margin measured at
 95.6%.
 
-**Mainnet: no.** B1 and B2 are development work, B3 waits on the token, and the audit and the
-`Ownable2Step` transfer have not happened. Nothing in Part 1 has been descoped; it has only been
-ordered.
+**Mainnet: no**, and the ordering below is the answer to "what is actually left". Updated
+2026-08-15: B1, B2, B4 and B0 are closed, so **nothing on the critical path is development work
+any more.** Every remaining item is a decision, a deployment, or an external party.
 
-Next action, unchanged: **B1, Uniswap V3 direct.**
+| #   | Item                                                                       | Whose      |
+| --- | -------------------------------------------------------------------------- | ---------- |
+| 1   | A dedicated **mainnet worker key**, its address into `serviceAgent`        | ours, fast |
+| 2   | **Hosting** — see below; nothing is deployed anywhere                      | theirs     |
+| 3   | **PUNO** exists, with a decided USD rate and a treasury conversion routine | theirs     |
+| 4   | `DeployMainnet` run; `vaultFactory`/`punoCredits` written into `config.ts` | both       |
+| 5   | **Audit**, and the multisig calling `acceptOwnership()`                    | theirs     |
+
+The dependency is strict: 3 gates 4, 4 gates any real user, and 2 gates all of it being public.
+
+### Hosting — not previously recorded anywhere
+
+Checked 2026-08-15: there is no `Dockerfile`, no `vercel.json`, no CI, no deploy config of any
+kind. `docker-compose.yml` starts **Postgres only**. The web app, the database and the worker all
+run on this laptop.
+
+That makes "public launch" blocked on infrastructure that does not exist, and it is worth doing
+before the rest rather than after, for one reason: the largest product gap is the absence of a
+public track record, and it closes only by accumulating history. Every day the worker is not
+running somewhere that stays on is a day missing from that record.
+
+Also load-bearing once real users exist: `tickAllAgents()` walks every live agent **sequentially**
+inside one `TICK_INTERVAL_MS` window. Fine at today's count; at some N a pass outruns its own
+interval. Not a launch blocker, but the first thing that will bend.

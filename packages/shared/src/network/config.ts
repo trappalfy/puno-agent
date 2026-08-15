@@ -60,6 +60,31 @@ export interface NetworkConfig {
   // null means the network has no demo vault and the free tier is unavailable
   // there, which is the correct state for mainnet: free runs belong on testnet.
   demoVault: { address: Address; agent: Address } | null;
+  /// The address Puno's worker signs trades with, and the address every vault
+  /// created here is armed with via `setAgent`.
+  ///
+  /// This is the public half of the worker's `AGENT_PRIVATE_KEY` and must never
+  /// be anything else — a key does not belong in this file or in a browser.
+  ///
+  /// Why one shared address rather than a key per vault: the worker ticks every
+  /// live agent in the database from a single process holding a single key
+  /// (apps/agent/src/main.ts, chain/client.ts), while `AgentVault` checks
+  /// `msg.sender == agent` on every trade. The wizard used to generate a fresh
+  /// key in the browser and hand it to the user, which meant the hosted worker
+  /// could not sign for any vault it created — every `executeTrade` would have
+  /// reverted with "not authorized". Arming vaults with the worker's own address
+  /// is what makes the hosted product able to trade at all, and it keeps us from
+  /// ever holding a user's key.
+  ///
+  /// What it can and cannot do is bounded by the contract, not by trust: the
+  /// agent may only swap allowlisted tokens through allowlisted routers inside
+  /// the owner's policy, and `withdraw` takes the owner's signature. A vault
+  /// owner revokes by calling `setAgent` themselves, and the grant expires on
+  /// its own regardless.
+  ///
+  /// null means the network has no worker key yet and the wizard refuses to
+  /// create agents there, the same way a null `vaultFactory` does.
+  serviceAgent: Address | null;
 }
 
 // Verified against https://docs.robinhood.com/chain/connecting (2026-08-11).
@@ -96,6 +121,13 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     // against a mainnet vault would spend real gas on simulations for people
     // who have not paid for anything.
     demoVault: null,
+    // Null on purpose, and not an oversight to be fixed by copying the testnet
+    // address down here. Mainnet needs its own worker key: reusing the testnet
+    // one would give a key that has signed on a throwaway chain, and has lived
+    // in a throwaway .env, trading rights over real vaults. Generate a fresh
+    // one, put its address here, and let the worker check it at boot — it
+    // refuses to start on a mismatch (apps/agent/src/chain/serviceAgent.ts).
+    serviceAgent: null,
   },
   testnet: {
     key: "testnet",
@@ -142,6 +174,11 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
       address: "0xcFA434255f47F4C8777043540d253CEDFb36B5e9",
       agent: "0x389AA9c066854a1e1A62a9F49910760a8D010adD",
     },
+    // The same address the demo vault above is armed with, and deliberately so:
+    // there is one worker on this network holding one key, and the demo vault
+    // was already arming it by hand on 2026-08-14. Vaults the wizard creates now
+    // arm the same address, which is what lets one worker tick all of them.
+    serviceAgent: "0x389AA9c066854a1e1A62a9F49910760a8D010adD",
   },
 };
 
