@@ -10,14 +10,15 @@
 engaged. Written 2026-08-16. Keep it current; a scope document that drifts from the tree is worse
 than none, because it is trusted.
 
-Freeze reference: **`41fbe9a`** (2026-08-15). Nothing in `contracts/` has changed since. If the
-tree moves before the engagement starts, update this line and say what moved — an auditor who
-reviews a commit that is no longer the one being deployed has produced a report about nothing.
+Freeze reference: **`3b64271`** (2026-08-16), which removed the dormant fee mechanism described in
+§5.1 — the last intended change. Nothing in `contracts/` has moved since. If the tree moves before
+an engagement starts, update this line and say what moved: an auditor who reviews a commit that is
+no longer the one being deployed has produced a report about nothing.
 
 ```bash
 cd contracts
 forge build          # solc 0.8.28, optimizer 200 runs, via_ir = true
-forge test           # 88 tests, 0 skipped, 7 suites
+forge test           # 80 tests, 0 skipped, 6 suites
 ```
 
 `via_ir` is on because `executeTrade` hits "stack too deep" without it. Worth knowing up front:
@@ -30,10 +31,10 @@ reproduced with the same setting.
 
 | File                   | nSLOC | External / public fns | What it is                                      |
 | ---------------------- | ----: | --------------------: | ----------------------------------------------- |
-| `src/AgentVault.sol`   |   342 |                    18 | Per-user non-custodial vault. The whole product |
+| `src/AgentVault.sol`   |   301 |                    16 | Per-user non-custodial vault. The whole product |
 | `src/PunoCredits.sol`  |    54 |                     4 | Takes PUNO payments, emits a credit event       |
 | `src/VaultFactory.sol` |    34 |                     2 | CREATE2 deployer for vaults                     |
-| **Total**              |   430 |                    24 |                                                 |
+| **Total**              |   389 |                    22 |                                                 |
 
 Dependencies are pinned by commit in `foundry.lock` and are **not** in scope:
 OpenZeppelin `v5.7.0` (`cab19933`), forge-std `v1.16.2` (`bf647bd6`).
@@ -73,7 +74,7 @@ path. **There is no proxy and no upgradeability anywhere.** A deployed vault's c
 | **Credits owner** | Intended: a multisig                | `setTreasury`, `setMinDeposit`, `sweep` on `PunoCredits`. Not related to any vault  |
 
 Owner-gated on `AgentVault`: `withdraw`, `setAgent`, `revokeAgent`, `setPriceFeed`, `setPolicy`,
-`pause`, `unpause`, `setFeeConfig`. `executeTrade` accepts `agent` **or** `owner`.
+`pause`, `unpause`. `executeTrade` accepts `agent` **or** `owner`. Everything else is a view.
 
 **The agent key is shared across every vault.** One worker process holds one key and signs for all
 of them. This is the most load-bearing assumption in the design and the thing most worth attacking:
@@ -89,9 +90,10 @@ hostile" as a live scenario, not a hypothetical.
 
 ## 4. Invariants we assert — please attack these
 
-1. **Only the owner can remove value.** `withdraw` is the sole path out, and it is `onlyOwner`.
-   (`collectFee` is a second path; see §5.1 — it is owner-configured, and we are proposing to
-   delete it.)
+1. **Only the owner can remove value.** `withdraw` is the sole path out of the vault, and it is
+   `onlyOwner`. No qualifier: the second path that used to exist was deleted for this reason
+   (§5.1). `executeTrade` swaps between allowlisted tokens and cannot send to an arbitrary
+   recipient.
 2. **`executeTrade` cannot exceed the policy.** Per-trade notional cap, rolling 24h notional cap,
    max position share, minimum seconds between trades, and slippage versus the oracle price. Each
    is checked on chain, and a violating trade reverts regardless of who proposed it.
@@ -115,22 +117,23 @@ hostile" as a live scenario, not a hypothetical.
 Stated in full deliberately. Rediscovering our own known issues is the most expensive way to spend
 an engagement, and hiding them is the fastest way to get a report we cannot trust.
 
-### 5.1 Dead fee mechanism — removal proposed, decision pending
+### 5.1 Dead fee mechanism — removed 2026-08-16 (`3b64271`)
 
-`setFeeConfig` / `collectFee` implement a high-water-mark performance fee in the quote token. It has
-never been active: `feeBps` is 0 in every deployment and there is no path that sets it. It also
-cannot serve the billing model — `setFeeConfig` is `onlyOwner`, and the owner is the _user_, so it
-can only ever pay a fee the user themselves configured.
+Recorded because it explains the shape of the diff if you look at history, and because the reason
+matters to invariant 4.1.
 
-It is not free to keep: two external functions, four storage slots, two events, and a **second path
-by which the quote token leaves the vault**, which is precisely what invariant 4.1 wants to be able
-to state without qualification. The code also carries a documented accounting gap already
-(`AgentVault.sol:361-367`): a deposit made after the high-water mark is initialised reads as
-appreciation and would be charged as profit.
+`setFeeConfig` / `collectFee` implemented a high-water-mark performance fee in the quote token. It
+was never active — `feeBps` was 0 in every deployment and nothing set it — and it could not serve
+the billing model either, since `setFeeConfig` was `onlyOwner` and the owner is the _user_.
 
-**Recommendation: delete before the engagement**, along with `test/AgentVault.Fees.t.sol`. If it is
-still present when you read this, that decision was not taken and the code is in scope as written —
-including the gap above, which we do not need re-reported.
+It was deleted rather than left dormant because `collectFee` transferred the quote token out,
+making it a second path by which value left a vault. It also carried a known accounting gap: a
+deposit made after the high-water mark was initialised read as appreciation and would have been
+charged as profit. Removing it took two external functions, four storage slots, two events, one
+constant and a 120-line test file with it.
+
+Nothing replaces it. Puno charges per action in PUNO through `PunoCredits`, which never touches
+`AgentVault`.
 
 ### 5.2 Found by our own fuzzing, already fixed (`7bd7065`)
 
@@ -209,17 +212,24 @@ Robinhood Chain is an **Arbitrum Orbit** chain. Mainnet 4663, testnet 46630.
 
 ## 8. Tests
 
-`forge test` — **88 passing, 0 skipped**, verified at `41fbe9a` on 2026-08-16.
+`forge test` — **80 passing, 0 skipped**, verified at `3b64271` on 2026-08-16.
 
 | Suite                         | Tests | Covers                                       |
 | ----------------------------- | ----: | -------------------------------------------- |
 | `AgentVault.Policy.t.sol`     |    28 | Every policy limit, and its revert           |
 | `PunoCredits.t.sol`           |    26 | Idempotency, fee-on-transfer, treasury paths |
 | `AgentVault.Arithmetic.t.sol` |     9 | Fuzz properties, 256 runs each               |
-| `AgentVault.Fees.t.sol`       |     8 | The mechanism proposed for deletion in §5.1  |
 | `AgentVault.AgentLifecycle`   |     6 | Grant, expiry, revocation                    |
 | `VaultFactory.t.sol`          |     6 | CREATE2 determinism                          |
 | `AgentVault.Access.t.sol`     |     5 | Access control                               |
+
+Was 88 before `3b64271`; the eight that went were the eight covering the removed fee mechanism, and
+no remaining test was weakened to keep the suite green.
+
+`forge build` emits 11 `forge-lint` informational warnings — mostly `unsafe-typecast` on casts a
+neighbouring `require` already bounds, plus naming rules. Exactly one is suppressed: the `uint192`
+cast in `_checkAndRecordDailyNotional`, where the `require` immediately above makes it provably
+safe. If you disagree with that suppression, it is a finding.
 
 `test/helpers/AgentVaultHarness.sol` exposes `_checkAndRecordDailyNotional` for property testing.
 It stays internal in production on purpose: a public version would let anyone pad the rolling
