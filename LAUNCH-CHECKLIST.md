@@ -48,7 +48,18 @@ can fill differently.
       until then the deployer's hot key still controls the treasury. Verify with
       `cast call <credits> "owner()"`, never by reading the deploy log.
 - [ ] **Contract audit.** Scope grew with `PunoCredits`; the $10–30k estimate roughly holds.
-- [ ] **Fuzz tests on `AgentVault` arithmetic** — never written.
+- [x] **Fuzz tests on `AgentVault` arithmetic. Done 2026-08-15** —
+      `test/AgentVault.Arithmetic.t.sol`, 9 properties at 256 runs each, covering feed-decimal
+      normalisation, the oracle floor (never above fair value, exact at zero slippage, monotonic
+      in slippage), the USD round trip, and the rolling 24h window. Writing them surfaced two
+      real holes, both now fixed and both unreachable by an example test: `setPriceFeed` accepted
+      a feed reporting **more than 18 decimals**, which would have bricked that token forever
+      with an unmessaged arithmetic panic on every price read; and the rolling window's
+      `uint192` downcast was **unchecked**, so a large enough notional would truncate to a small
+      recorded one and walk past the daily cap. `nav`, `minAcceptableOut`, `valueOf`,
+      `valueToRaw` and `recentNotionalUsd` are now public views — `minAcceptableOut` in
+      particular, because `risk.ts` reimplements that formula and a drifting copy is a silent
+      source of trades that pass locally and revert on chain.
 - [x] **`DeployTestnet` deployed with `treasury == deployer`** (D4). **Done 2026-08-15.** The
       script now requires `PUNO_TREASURY` and refuses one equal to the deployer, checked before
       broadcasting. `PunoCredits.deposit` also rejects `msg.sender == treasury` by name instead of
@@ -134,7 +145,7 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | `pnpm -r typecheck`                  | 4/4 projects clean                     |
 | `pnpm lint`                          | clean                                  |
 | `pnpm test`                          | **143** — shared 63, agent 74, web 6   |
-| `forge test -vv` (from `contracts/`) | **79/79**                              |
+| `forge test -vv` (from `contracts/`) | **88/88**                              |
 | `pnpm -r build`                      | both apps build; `web` emits 20 routes |
 
 If a count is _lower_ than the number above, tests were deleted or skipped — investigate before

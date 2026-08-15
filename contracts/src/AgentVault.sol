@@ -205,6 +205,12 @@ contract AgentVault is ReentrancyGuard {
         require(maxStaleness > 0, "AgentVault: zero staleness window");
         require(maxStaleness <= MAX_STALENESS_LIMIT, "AgentVault: staleness window too long");
         uint8 priceDecimals = AggregatorV3Interface(aggregator).decimals();
+        // `_normalizedPrice` scales by 10 ** (18 - priceDecimals). Above 18 that
+        // subtraction underflows and panics, which would not fail this call —
+        // it would brick the token permanently, reverting every price read and
+        // `nav()` with an arithmetic panic and no message. Caught here because
+        // configuration time is the only moment anyone can still fix it.
+        require(priceDecimals <= 18, "AgentVault: price decimals too high");
         priceFeeds[token] = PriceFeed({
             aggregator: aggregator,
             priceDecimals: priceDecimals,
@@ -392,6 +398,49 @@ contract AgentVault is ReentrancyGuard {
         return _nav();
     }
 
+    /// @notice The oracle-derived floor `executeTrade` will require `minOut` to
+    /// clear, for a hypothetical trade.
+    ///
+    /// Exposed because the off-chain risk engine reimplements this formula to
+    /// veto a trade before it costs an RPC round-trip, and a reimplementation
+    /// that drifts from the contract is a silent source of trades that pass
+    /// locally and revert on chain. Callers that can afford the call should ask
+    /// rather than approximate.
+    function minAcceptableOut(address tokenIn, address tokenOut, uint256 amountIn)
+        external
+        view
+        returns (uint256)
+    {
+        return _minAcceptableOut(tokenIn, tokenOut, amountIn);
+    }
+
+    /// @notice USD value (1e18) of `rawAmount` of `token` at its configured feed.
+    function valueOf(address token, uint256 rawAmount) external view returns (uint256) {
+        return _valueOf(token, rawAmount);
+    }
+
+    /// @notice Inverse of `valueOf` — raw token amount for a 1e18 USD value.
+    function valueToRaw(address token, uint256 valueUsd) external view returns (uint256) {
+        return _valueToRaw(token, valueUsd);
+    }
+
+    /// @notice Notional already used inside the rolling 24h window.
+    ///
+    /// The one policy limit the off-chain engine structurally cannot mirror —
+    /// the history lives in a private array with no getter, which is why
+    /// `risk.ts` defers this single check to the pre-trade simulation. With
+    /// this, a caller can see how much room is left instead of discovering it
+    /// by reverting.
+    function recentNotionalUsd() external view returns (uint256 sum) {
+        uint256 windowStart =
+            block.timestamp > NOTIONAL_WINDOW ? block.timestamp - NOTIONAL_WINDOW : 0;
+        uint256 len = tradeHistory.length;
+        for (uint256 i = tradeHistoryHead; i < len; i++) {
+            if (tradeHistory[i].timestamp < windowStart) continue;
+            sum += tradeHistory[i].notionalUsd;
+        }
+    }
+
     function allowedRoutersLength() external view returns (uint256) {
         return allowedRouters.length;
     }
@@ -467,6 +516,15 @@ contract AgentVault is ReentrancyGuard {
             sum += tradeHistory[i].notionalUsd;
         }
         require(sum <= maxDailyNotional, "AgentVault: exceeds daily notional cap");
+
+        // Checked, not silent. `notionalUsd` is bounded only by
+        // `maxNotionalPerTrade`, which the owner sets as a uint256, so an
+        // unchecked downcast would truncate a large notional into a small
+        // recorded one and let the rolling daily cap be walked straight past by
+        // trades that each look tiny in the history. The threshold is absurd —
+        // uint192 is about 6.3e39 USD at 1e18 scale — but "unreachable" and
+        // "unchecked" are different claims, and only one of them is enforced.
+        require(notionalUsd <= type(uint192).max, "AgentVault: notional too large to record");
 
         tradeHistoryHead = head;
         tradeHistory.push(
