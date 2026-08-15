@@ -1,3 +1,5 @@
+import type { BillableEvent } from "@puno/shared";
+
 export const NAV_LINKS = [
   { href: "#how-it-works", label: "How it works" },
   { href: "#safety", label: "Safety" },
@@ -58,27 +60,47 @@ export const SIGNALS = [
   },
 ];
 
-export const COST_TIERS = [
+/**
+ * The cost ladder, in the order a tick walks it. `key` names the billable event
+ * so the amount is read from PRICES_USD at render time; a null key is a step
+ * that is genuinely free and has no line in the tariff at all.
+ *
+ * The prices are deliberately not written here. This section and PricingSection
+ * render on the same page, so a hardcoded copy is a contradiction waiting to
+ * ship — and it was already shipped: these rows read "~$0.005" and "~$0.025+",
+ * which are *our model cost*, while the pricing card three sections below quoted
+ * the real $0.01 and $0.50. Besides understating the price of a decision by 20×,
+ * printing our cost beside our price publishes the margin between them.
+ */
+export const COST_TIERS: {
+  label: string;
+  key: BillableEvent | null;
+  lime?: boolean;
+  body: string;
+}[] = [
   {
     label: "Every tick",
-    price: "$0",
+    key: null,
     lime: true,
     body: "Deterministic checks — prices, stop-loss, take-profit, triggers. No model call, ever.",
   },
   {
     label: "On trigger",
-    price: "~$0.005",
+    key: "screen",
     body: "Claude Haiku 4.5 screens whether the situation is even worth a full look.",
   },
   {
     label: "On escalation",
-    price: "~$0.025+",
+    key: "decision",
     body: "Claude Opus 5 only runs when the cheap model decides it's actually warranted.",
   },
   {
-    label: "Rejected",
-    price: "$0",
-    body: "The risk engine vetoes anything outside your on-chain limits before it ever executes.",
+    // Not "Rejected · $0": the risk engine vetoes *after* the decision the user
+    // has already paid for, so a rejection is this fee not being charged, not
+    // the tick becoming free.
+    label: "Executed trade",
+    key: "trade",
+    body: "Charged only when the swap confirms on-chain. A trade the risk engine vetoes, or one that reverts, adds nothing.",
   },
 ];
 

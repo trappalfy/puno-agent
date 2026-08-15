@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { PRICES_USD } from "@puno/shared";
 import { SectionEyebrow } from "../primitives/SectionEyebrow";
 import { COST_TIERS } from "../../lib/copy";
 
@@ -43,8 +44,13 @@ export function CostRouting() {
         transition={{ duration: 0.7, delay: 0.1 }}
         className="liquid-glass rounded-2xl p-5"
       >
+        {/* This read "Today · 1,842 ticks routed" — an invented number presented
+            as live telemetry on a page whose whole claim is proof over promises,
+            and next to a console mock honest enough to label itself
+            illustrative. There is no public tick feed to source it from yet, so
+            the header says what the panel actually is. */}
         <div className="text-xs text-white/50 font-jetbrains-mono">
-          Today · 1,842 ticks routed
+          Per action · priced in USD, paid in PUNO
         </div>
         <div className="mt-4 flex flex-col gap-3">
           {COST_TIERS.map((tier) => (
@@ -56,7 +62,7 @@ export function CostRouting() {
                     tier.lime ? "text-lime-phosphor" : "text-white"
                   }`}
                 >
-                  {tier.price}
+                  {tier.key === null ? "$0" : `$${PRICES_USD[tier.key].toFixed(2)}`}
                 </span>
               </div>
               <p className="mt-1.5 text-xs text-white/50 leading-[1.4]">{tier.body}</p>
