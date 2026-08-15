@@ -73,10 +73,21 @@ hosted**, with a shared service key:
 `0x389AA9c066854a1e1A62a9F49910760a8D010adD`, `NETWORKS.testnet.serviceAgent` holds it, and
 `cast call <demoVault> "agent()"` returns it.
 
-- [ ] **Mainnet `serviceAgent` is null and must stay null until a dedicated key exists.** Do not
-      copy the testnet address down: that key has signed on a throwaway chain and lived in a
-      throwaway `.env`. Generate a fresh one, put its address in `config.ts`, and let the worker's
-      boot check prove the pair matches.
+- [x] **Mainnet `serviceAgent` — done 2026-08-15.** `0x0aCd6ea59305B882FDC42e78b209Ec9bC39926a8`,
+      generated fresh and used on no other chain. The private half went straight from `cast wallet
+    new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed with
+      `git check-ignore`) and has never been through a clipboard or a chat — which is the whole
+      point, given how the August incident worked. Checked distinct from the old deployer, the
+      attacker, the current deployer and the testnet agent.
+      **Two things still owed on it:**
+- [ ] **Fund it with ETH on 4663 before the first live mainnet vault.** It pays gas on every
+      `executeTrade` and holds 0 today. Measured floor: the real testnet trade burned 260,225 gas;
+      at the mainnet gas price observed on 2026-08-15 (28,226,000 wei) that is ~0.0000073 ETH a
+      trade, so 0.01 ETH covers well over a thousand. Treat it as a floor, not a forecast — that
+      trade went through `MockRouter`, and a real Uniswap V3 swap costs more.
+- [ ] **Move the key off this laptop when hosting exists.** `.env.mainnet.local` is a holding
+      place, not a home. It belongs in the host's secret store as `AGENT_PRIVATE_KEY` alongside
+      `NETWORK=mainnet`; delete the local file once it is there.
 
 ### Security and ownership — must happen before mainnet money
 

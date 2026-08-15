@@ -121,13 +121,18 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     // against a mainnet vault would spend real gas on simulations for people
     // who have not paid for anything.
     demoVault: null,
-    // Null on purpose, and not an oversight to be fixed by copying the testnet
-    // address down here. Mainnet needs its own worker key: reusing the testnet
-    // one would give a key that has signed on a throwaway chain, and has lived
-    // in a throwaway .env, trading rights over real vaults. Generate a fresh
-    // one, put its address here, and let the worker check it at boot — it
-    // refuses to start on a mismatch (apps/agent/src/chain/serviceAgent.ts).
-    serviceAgent: null,
+    // Its own key, generated 2026-08-15 and never used on any other chain —
+    // deliberately not the testnet worker address, which has signed on a
+    // throwaway chain and lived in a throwaway .env. The private half was
+    // written straight to a gitignored file and has never been through a
+    // clipboard or a chat; the worker proves the pair at boot and refuses to
+    // start on a mismatch (apps/agent/src/chain/serviceAgent.ts).
+    //
+    // Holds no ETH yet, so it cannot pay gas for a trade. That is fine until
+    // mainnet has a VaultFactory — the wizard's factory gate fires first — but
+    // it must be funded before the first live vault, or every executeTrade
+    // fails on gas rather than on anything meaningful.
+    serviceAgent: "0x0aCd6ea59305B882FDC42e78b209Ec9bC39926a8",
   },
   testnet: {
     key: "testnet",
