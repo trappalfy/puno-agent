@@ -59,9 +59,14 @@ stale-feed problem: the agent declines, correctly, and the user reads it as brok
 ## The decision, which is the owner's
 
 **A — Keep `EQUITY_STALENESS = 1 hours`.** Correct risk posture: never act on a stale equity
-mark. Cost: the product must say plainly that agents trade during market hours, the UI must
-render "market closed" rather than "NAV unavailable", and the free-tier demo must not land a
-visitor on a refusal at a weekend. Nothing about the contract changes.
+mark. Cost: the product must say plainly that agents trade during market hours, and the UI must
+render "market closed" rather than "NAV unavailable". Nothing about the contract changes.
+
+> **Correction.** An earlier draft of this file also claimed the free tier "sends new visitors
+> into it blind at weekends". That is wrong. The trial runs on testnet against
+> `MockAggregatorV3`, which stamps `block.timestamp` when the answer is set, and
+> `price-keeper.ts` forces a refresh immediately before every free-tier run. Testnet feeds are
+> never stale, so the free tier cannot hit this at all. The problem is confined to mainnet.
 
 **B — Widen it to cover the weekend (≈ 74 h).** Makes the agent continuously live. **Recommended
 against**: it authorises trading a Friday mark on a Sunday, and an equity that gaps at Monday's
@@ -76,6 +81,43 @@ than A, and it is A plus honesty rather than an alternative to it.
 nothing in the product tells the truth about it, and the free tier currently sends new visitors
 into it blind at weekends. B trades away the oracle floor for uptime and should not be taken
 without deciding that explicitly.
+
+## Decided and implemented, 2026-08-15
+
+**A, plus C.** `EQUITY_STALENESS` stays at 1 hour — untouched, so the risk posture is exactly
+what it was. What changed is that the system now knows the difference between "closed" and
+"broken", and says so.
+
+`packages/shared/src/market/session.ts` classifies the session **from the oracles themselves,
+not from a trading calendar**. A hardcoded holiday table is wrong the first time an exchange
+adds a half-day and it is wrong silently; the feeds are the ground truth the vault actually
+enforces against. The signature measured above is what makes it readable — a closed market
+leaves every equity stale and the quote fresh, while an oracle outage takes both down. So:
+
+| Evidence                              | State                                 |
+| ------------------------------------- | ------------------------------------- |
+| every equity fresh                    | `open`                                |
+| every equity stale, quote fresh       | `closed`                              |
+| some stale, or the quote is stale too | `degraded` — never reported as closed |
+| no equities allowlisted               | `no-equities`                         |
+
+**`tick.ts` skips before the screening call** on `closed` and `no-equities`. Neither could ever
+reach a trade — `_nav()` reverts on a stale feed, and an unlisted token is refused outright — so
+the old behaviour charged the user a screening fee to be told it was Saturday. `protect` still
+runs ahead of the check and is already stale-safe, so a stop-loss keeps its chance to fire.
+`degraded` still ticks: a vault with three equities and one dead feed can trade the other two.
+
+No audit row is written for a skip. The tick runs every 15 s, so a weekend would produce roughly
+fifteen thousand identical "did nothing" entries per agent; the audit log records actions taken.
+
+**`MarketBanner`** on the agent page says which of the four states it is in, reading the feeds
+live rather than trusting the worker's last opinion — a vault whose worker is stopped would
+otherwise show a stale view of staleness. Amber, not red, and silent when the market is open: a
+banner that is always on screen stops being read exactly when it matters.
+
+One consequence worth naming: a vault allowlisting only the quote token — every vault built
+before B2 — now classifies as `no-equities` and stops ticking instead of paying for a screen
+and a decision that `risk.ts` was always going to reject. That is a saving, not a regression.
 
 ## What this does not block
 

@@ -20,13 +20,13 @@ Read it before touching anything.
 
 pnpm workspaces. `pnpm -r <script>` runs across all of them.
 
-| Path | What |
-|---|---|
-| `apps/web` | Next.js 15 product app — wallet auth (SIWE), agent CRUD, terminal UI, billing |
-| `apps/site` | Vite 8 marketing landing, deliberately decoupled from the product app |
-| `apps/agent` | Worker: the trading tick loop, deposit indexer, DB migrations |
+| Path              | What                                                                            |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `apps/web`        | Next.js 15 product app — wallet auth (SIWE), agent CRUD, terminal UI, billing   |
+| `apps/site`       | Vite 8 marketing landing, deliberately decoupled from the product app           |
+| `apps/agent`      | Worker: the trading tick loop, deposit indexer, DB migrations                   |
 | `packages/shared` | Design tokens, ABIs, pricing, DB schema, network config — the seam between apps |
-| `contracts` | Foundry: `AgentVault`, `VaultFactory`, `PunoCredits` |
+| `contracts`       | Foundry: `AgentVault`, `VaultFactory`, `PunoCredits`                            |
 
 ---
 
@@ -38,10 +38,10 @@ gone entirely.
 Prices are canonical in **USD** (`packages/shared/src/pricing.ts`):
 
 ```ts
-PRICES_USD = { screen: 0.01, decision: 0.50, trade: 0.25 }
-STARTER_GRANT_USD = 1.0        // 2 decisions, one grant per account, ever
-MIN_DEPOSIT_USD = 5.0
-LOW_BALANCE_WARNING_USD = 1.0
+PRICES_USD = { screen: 0.01, decision: 0.5, trade: 0.25 };
+STARTER_GRANT_USD = 1.0; // 2 decisions, one grant per account, ever
+MIN_DEPOSIT_USD = 5.0;
+LOW_BALANCE_WARNING_USD = 1.0;
 ```
 
 The user sees prices **in PUNO**; conversion happens **server-side only**. There is no
@@ -56,7 +56,7 @@ USD liability backed by a floating asset.
 **BYOK is a modifier, not a tier.** A user with their own Anthropic key pays nothing for
 `screen`/`decision`, but still pays for `trade`.
 
-`modelCalls.costUsd` is *our cost*. The credit ledger is *what the user was charged*. Never
+`modelCalls.costUsd` is _our cost_. The credit ledger is _what the user was charged_. Never
 merge them — the margin measurement depends on keeping them apart.
 
 ---
@@ -81,6 +81,11 @@ packed into the aggregator's slot), bounded by `MAX_STALENESS_LIMIT = 2 days`. A
 global threshold cannot work: equity feeds republish on deviation (minutes), while pegged
 stablecoins only publish on the 24h heartbeat. Measured live, USDG was 22h stale against
 the old 1h threshold, so `_nav()` reverted on roughly 23 of every 24 hours.
+**Correction, 2026-08-15:** "equity feeds republish on deviation (minutes)" is true _only
+during the US session_. Measured on a Saturday, all five mainnet equity feeds were 25–30 h
+stale — last published inside Friday's session — while USDG, ETH and BTC were ~4 h old. Out of
+hours the relationship inverts entirely. See `EQUITY-FEED-HOURS-2026-08-15.md`; the constants
+below are unchanged and still correct.
 `MockAggregatorV3` stamps `block.timestamp`, so **no testnet run could ever have surfaced
 this** — it only appeared against real feeds. Deploy constants: `QUOTE_STALENESS = 26 hours`,
 `EQUITY_STALENESS = 1 hours`. **Re-confirmed live on 2026-08-14**: USDG/USD was 22.4 h stale
@@ -88,7 +93,7 @@ while AAPL, TSLA and NVDA were 0–0.3 h. Both constants still hold; do not coll
 
 **`PunoCredits` idempotency is `depositNonce`, not `txHash`.** One transaction can carry
 several deposits, so a txHash key would silently drop credits. The event also reports what
-the treasury *actually received*, not the requested amount — fee-on-transfer safety.
+the treasury _actually received_, not the requested amount — fee-on-transfer safety.
 
 **Settled trades charge with `allowNegative: true`.** After a $0.50 decision the balance can
 fall below the $0.25 trade fee, but by then the swap is already on-chain and gas is spent.
@@ -100,13 +105,13 @@ rather than erasing the debt. The L2 decision call is separately gated on
 $0.51`, deliberately not a round number: a paper run never reaches a billable trade (only a
 `confirmed` trade is charged), so this is the exact cost of one free run and the balance lands
 on zero. A remainder too small to buy anything reads as money taken and not honoured. The
-grant cannot fund a *live* run — that is what the tariff is for. Locked by
+grant cannot fund a _live_ run — that is what the tariff is for. Locked by
 `apps/agent/src/quota/starter-grant.test.ts`, which walks the real gates in order rather than
 dividing by the decision price: the earlier $1.00 grant was documented as buying two decisions
 and bought one, because the L2 gate reserves `decision + trade` up front.
 
 **Testnet mock feeds need a keeper, or the demo shows a refusal.**
-`MockAggregatorV3` stamps `block.timestamp` when the answer is *set*, not when it is read, so a
+`MockAggregatorV3` stamps `block.timestamp` when the answer is _set_, not when it is read, so a
 testnet feed goes stale one hour after anyone last touched it. Measured: TSLA 12,176 s and AAPL
 8,276 s against a 3,600 s window. The visible effect was the demo agent declining to trade and
 explaining, correctly, that it would not act on an untrusted mark — the worst possible first
@@ -115,13 +120,13 @@ refreshes them on a timer and, forced, immediately before every free-tier run so
 depends on timer phase. It also walks the equity prices (±1.2% a pass, mean-reverting to an
 anchor, quote token pinned) so triggers can fire and the market is not frozen.
 
-Note this is *not* fixable in the agent's judgement: `AgentVault._nav()` reverts on a stale
+Note this is _not_ fixable in the agent's judgement: `AgentVault._nav()` reverts on a stale
 feed, so an agent argued into trading anyway would only reach a failed simulation. A fresh mark
 is the only thing that works, and loosening the staleness check would break the one invariant
 that measurably mattered against real feeds.
 
 The keeper **broadcasts while `DRY_RUN=true`** — deliberate, and the one exception. DRY_RUN's
-promise is that no *trade* is sent; this touches no vault, router or funds, only a mock oracle
+promise is that no _trade_ is sent; this touches no vault, router or funds, only a mock oracle
 that exists on testnet. It cannot reach mainnet twice over: `isTestnet` is false there and
 `demoVault` is null. `TESTNET_PRICE_KEEPER=false` switches it off.
 
@@ -131,7 +136,7 @@ nothing read it — only the process-wide `DRY_RUN` decided whether a trade was 
 agent marked dry-run in the database would have traded for real as soon as the worker ran with
 `DRY_RUN=false`, while its owner's console said otherwise. `runTick` now reads it. The three
 sources — `config.dryRun`, `agents.dry_run`, `TickOptions.paper` — are OR-ed so each can only
-*add* a restriction; nothing can turn a run that any of them called paper into a live one. In
+_add_ a restriction; nothing can turn a run that any of them called paper into a live one. In
 paper mode the L2 gate reserves the decision alone, since no billable trade can result.
 
 **Comparison replay is never billed** — it is our measurement, not a service to the user.
@@ -174,13 +179,13 @@ it there.
 `apps/agent/src/chain/vault.ts` are deliberate, not an oversight.
 
 **`AgentVault.setFeeConfig`/`collectFee` are dead code.** They are a high-water-mark profit
-fee in USDG, and `setFeeConfig` is `onlyOwner` where the owner is the *user*. They cannot
+fee in USDG, and `setFeeConfig` is `onlyOwner` where the owner is the _user_. They cannot
 be repurposed for billing.
 
 **TypeScript runs with `exactOptionalPropertyTypes: true`** — optional props must be typed
 `| undefined`. Also: `and()` returns `SQL | undefined`, which trips this; use `sql\`\`` directly.
 
-**Foundry cheatcode ordering:** `vm.prank`/`vm.expectRevert` attach to the *next call*,
+**Foundry cheatcode ordering:** `vm.prank`/`vm.expectRevert` attach to the _next call_,
 including view calls embedded in argument lists. Hoist those to locals first.
 
 ---
@@ -200,17 +205,17 @@ Everything below was verified by execution, not assumed:
 
 Deploy cost, simulated:
 
-| Script | Gas | ETH |
-|---|---|---|
-| `DeployTestnet` | 13,497,489 | 0.000270 |
-| `DeployMainnet` | 3,584,794 | 0.000317 (forge pads ~2×; real ≈ $0.25–0.30) |
+| Script          | Gas        | ETH                                          |
+| --------------- | ---------- | -------------------------------------------- |
+| `DeployTestnet` | 13,497,489 | 0.000270                                     |
+| `DeployMainnet` | 3,584,794  | 0.000317 (forge pads ~2×; real ≈ $0.25–0.30) |
 
 Testnet ETH **cannot be bridged in** — it must come from
 `https://faucet.testnet.chain.robinhood.com`.
 
 **Re-verified 2026-08-14** on the rebuilt machine: `forge test` 74/74, unit tests 111
 (shared 51, agent 54, web 6), `pnpm -r typecheck` 4/4 clean, `pnpm lint` clean, both apps
-build (`web` emits 17 routes). Deploy simulations were *not* re-run — they need a funded
+build (`web` emits 17 routes). Deploy simulations were _not_ re-run — they need a funded
 deployer, which is open work item 1.
 
 ---
@@ -220,13 +225,13 @@ deployer, which is open work item 1.
 The machine was wiped, so this is the full list of what a bare Windows box needs. Nothing
 here is optional; all of it was installed and verified by execution.
 
-| Tool | Version | Source |
-|---|---|---|
-| Node.js | 24.19.0 | winget `OpenJS.NodeJS.LTS` |
-| pnpm | 11.21.0 | `npm i -g pnpm@11.21.0` — matches the `packageManager` pin exactly |
-| Git | 2.55.0.3 | winget `Git.Git` |
-| Foundry | 1.5.1-stable | GitHub release zip → `~/.foundry/bin`, added to user PATH |
-| PostgreSQL | 16.15-1 | EDB installer, service `postgresql-x64-16` |
+| Tool       | Version      | Source                                                             |
+| ---------- | ------------ | ------------------------------------------------------------------ |
+| Node.js    | 24.19.0      | winget `OpenJS.NodeJS.LTS`                                         |
+| pnpm       | 11.21.0      | `npm i -g pnpm@11.21.0` — matches the `packageManager` pin exactly |
+| Git        | 2.55.0.3     | winget `Git.Git`                                                   |
+| Foundry    | 1.5.1-stable | GitHub release zip → `~/.foundry/bin`, added to user PATH          |
+| PostgreSQL | 16.15-1      | EDB installer, service `postgresql-x64-16`                         |
 
 Traps worth remembering, all hit on 2026-08-14:
 
@@ -239,7 +244,7 @@ Traps worth remembering, all hit on 2026-08-14:
   check that, given the project's history.
 - **The EDB installer needs its arguments as one quoted string.** PowerShell's
   `Start-Process -ArgumentList @(...)` splits `C:\Program Files\...` on the space and the
-  installer dies with *"Expected option but got Files\PostgreSQL\16"* — exit code 1, no log.
+  installer dies with _"Expected option but got Files\PostgreSQL\16"_ — exit code 1, no log.
 - **`pnpm install` will time out on a slow link.** This connection runs ~0.34 MB/s; the
   default fetch timeout kills the install at ~575/578 packages. Raise it once:
   `pnpm config set --global fetch-timeout 900000` and `fetch-retries 8`. Second run: 3m57s.
@@ -258,13 +263,13 @@ equivalent container for anyone who prefers it. Migrations are applied; 13 table
 Live and verified by execution — bytecode present, wiring read back from chain. Addresses
 are in `packages/shared/src/network/config.ts` under `NETWORKS.testnet`.
 
-| Contract | Address |
-|---|---|
-| VaultFactory | `0x486901cBa710C5Fb1032AB1bB25d190E3f845998` |
-| PunoCredits | `0xD0D4B491D8980cd49b0eCf151ad30f8f779D74f6` |
-| Mock PUNO | `0x1A480B089d8A5E2B77A1bD8908aBFF9bB6af21da` |
-| Demo AgentVault | `0xcFA434255f47F4C8777043540d253CEDFb36B5e9` |
-| MockRouter | `0x58fc3D03E57aC4b909b04356CF9Ae8b420885719` |
+| Contract          | Address                                      |
+| ----------------- | -------------------------------------------- |
+| VaultFactory      | `0x486901cBa710C5Fb1032AB1bB25d190E3f845998` |
+| PunoCredits       | `0xD0D4B491D8980cd49b0eCf151ad30f8f779D74f6` |
+| Mock PUNO         | `0x1A480B089d8A5E2B77A1bD8908aBFF9bB6af21da` |
+| Demo AgentVault   | `0xcFA434255f47F4C8777043540d253CEDFb36B5e9` |
+| MockRouter        | `0x58fc3D03E57aC4b909b04356CF9Ae8b420885719` |
 | Mock USDG (quote) | `0x5fecF7bA6365E6763b8984c43307B417A498aD40` |
 
 Real cost **0.0001124 ETH**, not the estimated 0.000270 — forge padded ~2.4×.
@@ -306,18 +311,18 @@ wiped and reinstalled Windows on both drives.
 - Confirm with the user that the reinstall is done before treating any local key as safe.
 
 **Resolved on 2026-08-14.** The user confirmed the Windows reinstall. The whole toolchain was
-rebuilt from scratch on the clean system (see *Development environment* below) and a new root
+rebuilt from scratch on the clean system (see _Development environment_ below) and a new root
 `.env` was generated there — `ENCRYPTION_KEY`, `SESSION_SECRET`, `DEPLOYER_PRIVATE_KEY` and
 `AGENT_PRIVATE_KEY` are all fresh; nothing was carried across the reinstall. New addresses:
 
-| Role | Address |
-|---|---|
+| Role     | Address                                      |
+| -------- | -------------------------------------------- |
 | deployer | `0x7b22e721AeE49C4306699a5E77243372FA6afBDa` |
-| agent | `0x389AA9c066854a1e1A62a9F49910760a8D010adD` |
+| agent    | `0x389AA9c066854a1e1A62a9F49910760a8D010adD` |
 
 The old deployer `0x81FDDF1dAD8ED65fA60bF1F4B89A3FA5F5B829D2` and the attacker's
 `0xeB73130796f89e2df501526663e1cD114eAC20Ab` must never appear in a transaction again — if
-either shows up in a deploy, stop. Because the original attack was a *clipboard* hijack,
+either shows up in a deploy, stop. Because the original attack was a _clipboard_ hijack,
 addresses still deserve a visual check at the moment of use, not just at the moment of
 generation.
 
@@ -330,21 +335,21 @@ when the two disagree, the checklist is right — it is the one that gets update
 
 ~~1. Fund the fresh deployer~~ **Done 2026-08-14** — faucet sent 0.01 ETH.
 ~~2. Run `DeployTestnet` and write the addresses into config.ts~~ **Done 2026-08-14** —
-   see *Testnet deployment* below; `NETWORKS.testnet` now carries real addresses.
+see _Testnet deployment_ below; `NETWORKS.testnet` now carries real addresses.
 ~~3. Set a manual PUNO/USD rate~~ **Done 2026-08-14** — $0.01, a testnet placeholder for the
-   mock token. The mainnet rate is a real business decision, not a config value to copy.
+mock token. The mainnet rate is a real business decision, not a config value to copy.
 
 ~~4. End-to-end scenario~~ **Done 2026-08-14.** Deposit → indexer → credit → ledger invariant
-   → idempotent replay, then agent → screen → decision → risk → simulate → **real on-chain
-   trade** (`0x082d0f73…`), with all three charges verified. See `READINESS-2026-08-14.md`.
+→ idempotent replay, then agent → screen → decision → risk → simulate → **real on-chain
+trade** (`0x082d0f73…`), with all three charges verified. See `READINESS-2026-08-14.md`.
 ~~5. Margin check~~ **Done 2026-08-14 — measured, not assumed.** Our cost $0.057007 against
    $1.30 charged: **95.6% margin**. A decision costs $0.0245 on the first call and **$0.0097**
-   once its prompt is cached, against $0.50 billed — the assumption is conservative by ~50×,
+once its prompt is cached, against $0.50 billed — the assumption is conservative by ~50×,
    and `max_tokens: 4096` caps the worst case at $0.102. Full table in the readiness file.
 
 ~~6. Redo the launch-readiness audit and save it to a file~~ **Done 2026-08-14** —
-   `READINESS-2026-08-14.md`, written to disk before anything else, so compaction cannot
-   eat it again. B1/B2/B3 and D1–D5 live there; D1, D2, D3 and D5 are fixed.
+`READINESS-2026-08-14.md`, written to disk before anything else, so compaction cannot
+eat it again. B1/B2/B3 and D1–D5 live there; D1, D2, D3 and D5 are fixed.
 
 7. **Phase 4 — real router integration (blocker B1).** `loop/simulate.ts` hardcodes calldata
    for `MockRouter.swap`, which exists only on 46630. The single gate on mainnet.
@@ -357,11 +362,11 @@ when the two disagree, the checklist is right — it is the one that gets update
    populated decision history, not a synthetic prompt.
 10. **Fuzz tests on `AgentVault` arithmetic** — never written.
 11. **Haiku cache gap**: the screen prompt is ~2,885 tokens against Haiku's 4,096-token cache
-   minimum, so caching never engages (confirmed by measurement — the counters were 0 across
-   all five screen calls) and ~$0.0018 of the $0.005 screen margin is wasted. Either pad the
-   prompt past the minimum or accept the loss deliberately.
+    minimum, so caching never engages (confirmed by measurement — the counters were 0 across
+    all five screen calls) and ~$0.0018 of the $0.005 screen margin is wasted. Either pad the
+    prompt past the minimum or accept the loss deliberately.
 12. **Before mainnet**: transfer `PunoCredits` ownership off the hot `.env` key using
-   `Ownable2Step`.
+    `Ownable2Step`.
 
 **Unresolved, not blocking:** selling a token for access to a service that trades
 securities is two overlapping regulatory surfaces, not one (audit finding S6 got sharper,

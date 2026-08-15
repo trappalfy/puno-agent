@@ -16,6 +16,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { ForbiddenError } from "@/lib/hooks/fetchJson";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { KillSwitch } from "@/components/terminal/KillSwitch";
+import { MarketBanner } from "@/components/terminal/MarketBanner";
 import { SessionKeyCard } from "@/components/terminal/SessionKeyCard";
 import { RiskLimitsPanel } from "@/components/terminal/RiskLimitsPanel";
 import { PositionsTable } from "@/components/terminal/PositionsTable";
@@ -113,6 +114,10 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
         </div>
         <KillSwitch vaultAddress={vault.address as Address} />
       </div>
+
+      {/* Above the numbers, because "why is nothing happening" outranks every
+          figure on this page when the answer is "it is Saturday". */}
+      <MarketBanner vaultAddress={vault.address as Address} quoteToken={vault.quoteToken} />
 
       <div className="grid grid-cols-1 gap-[var(--layout-element-gap)] md:grid-cols-3">
         <MetricTile

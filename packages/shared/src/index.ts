@@ -1,5 +1,6 @@
 export * from "./network/index.js";
 export * from "./abi/index.js";
+export * from "./market/session.js";
 export * as schema from "./db/schema.js";
 export * from "./db/credits.js";
 export * from "./pricing.js";

@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import { classifyMarket, describeMarket, shouldSkipTick } from "@puno/shared";
 import { readVaultPolicy } from "../chain/vault.js";
 import { usd1e18ToNumber } from "../chain/money.js";
 import { guard } from "./guard.js";
@@ -305,6 +306,36 @@ export async function runTick(agentId: string, opts: TickOptions = {}): Promise<
         paper,
       });
     }
+  }
+
+  // ---- L0: market session ----
+  //
+  // Placed after `protect` and before the triggers on purpose. The stop-loss
+  // pass is already stale-safe (it refuses to act on a stale mark), so it keeps
+  // its chance to run; what is skipped is the path that costs money.
+  //
+  // Measured 2026-08-15: equity oracles on this chain publish only during the
+  // US session, leaving every equity feed 25–30 h stale overnight and all
+  // weekend while the quote feed stays fresh. `_nav()` reverts on a stale feed,
+  // so a tick here could only ever reach `risk.ts` and be told "NAV
+  // unavailable" — after the user had already paid the screening fee. Charging
+  // someone to discover it is Saturday is charging them for our own failure to
+  // look. See EQUITY-FEED-HOURS-2026-08-15.md.
+  //
+  // No audit row: the tick runs every 15 s by default, so a weekend would write
+  // roughly fifteen thousand identical "did nothing" entries per agent. The
+  // audit log records actions taken, and this is the absence of one.
+  const session = classifyMarket({
+    quoteStale:
+      prices.find((p) => p.token.toLowerCase() === quoteToken.toLowerCase())?.stale ?? false,
+    equities: prices
+      .filter((p) => p.token.toLowerCase() !== quoteToken.toLowerCase())
+      .map((p) => ({ symbol: p.symbol, stale: p.stale })),
+  });
+
+  if (shouldSkipTick(session)) {
+    console.log(`${label} ${describeMarket(session)}`);
+    return;
   }
 
   // ---- L0: triggers ----
