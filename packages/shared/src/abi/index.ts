@@ -3,4 +3,5 @@ export * from "./vaultFactory.js";
 export * from "./erc20.js";
 export * from "./aggregatorV3.js";
 export * from "./mockRouter.js";
+export * from "./uniswapV3.js";
 export * from "./punoCredits.js";

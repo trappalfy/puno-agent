@@ -22,6 +22,20 @@ export interface NetworkConfig {
   routers: {
     oneInch: Address;
   };
+  // Uniswap V3 periphery, or null where no V3 deployment exists (testnet uses
+  // MockRouter instead — see `routers.oneInch` there).
+  //
+  // Resolved by `factory()`, never by name: Blockscout returns five contracts
+  // called `SwapRouter` and five called `QuoterV2` on 4663, belonging to at
+  // least four different factories, and only the pair below answers with the
+  // factory that owns the equity/USDG pools. See PHASE4-ROUTING-2026-08-14.md.
+  // `factory` is kept alongside them so that check can be re-run rather than
+  // trusted.
+  uniswapV3: {
+    factory: Address;
+    swapRouter02: Address;
+    quoterV2: Address;
+  } | null;
   // null until a VaultFactory is actually deployed and verified on this
   // network — see contracts/script/DeployTestnet.s.sol. Never fill this with
   // an address from a throwaway local Anvil run; those aren't persistent and
@@ -66,6 +80,15 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     routers: {
       oneInch: "0x5A705DE8982235a7fa45bB83dCaCf03a211389C7",
     },
+    // Verified on chain 2026-08-14: both periphery contracts report this
+    // factory, and their ABIs were read from the verified source of the
+    // deployed bytecode rather than the upstream repo (SwapRouter02.sol from
+    // swap-router-contracts, so `exactInputSingle` carries no `deadline`).
+    uniswapV3: {
+      factory: "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+      swapRouter02: "0xCaf681a66D020601342297493863E78C959E5cb2",
+      quoterV2: "0x5dEdB1F91F5F56177BB4D193aD281b33e4f13098",
+    },
     vaultFactory: null,
     punoToken: null,
     punoCredits: null,
@@ -101,6 +124,10 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
       // does not exist on 46630, and every trade would revert.
       oneInch: "0x58fc3D03E57aC4b909b04356CF9Ae8b420885719",
     },
+    // No Uniswap V3 deployment on 46630 — that is the whole reason MockRouter
+    // exists. Null rather than the mainnet addresses: pointing the quoter at a
+    // contract that is not there would fail as an opaque revert on every tier.
+    uniswapV3: null,
     // Deployed 2026-08-14 by DeployTestnet, verified on chain (bytecode present,
     // VaultFactory.quoteToken -> usdg above, PunoCredits.token -> punoToken).
     vaultFactory: "0x486901cBa710C5Fb1032AB1bB25d190E3f845998",

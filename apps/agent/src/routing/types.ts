@@ -36,6 +36,12 @@ export interface SwapRequest {
   /// itself — the two are then allowed to disagree, and that disagreement is
   /// the whole point of Phase 4.
   fairAmountOut: bigint;
+  /// The oracle-derived floor the vault will enforce anyway. A real venue puts
+  /// it in its own calldata too, so the *router* refuses a bad fill instead of
+  /// the swap succeeding and the vault reverting one step later — same outcome,
+  /// far clearer revert. Never recomputed from the venue's own quote: see
+  /// `SwapPlan.amountOut`.
+  minOut: bigint;
 }
 
 export interface SwapPlan {

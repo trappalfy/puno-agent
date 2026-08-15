@@ -47,13 +47,14 @@ export async function simulateTrade(
   let amountOut: bigint;
   let route: string;
   try {
-    const plan = await getRouterAdapter(config.network).plan({
+    const plan = await getRouterAdapter(config.network, publicClient).plan({
       vault,
       tokenIn: trade.tokenIn,
       tokenOut: trade.tokenOut,
       amountIn: trade.amountIn,
       router: trade.router,
       fairAmountOut: trade.amountOut,
+      minOut: trade.minOut,
     });
     calldata = plan.calldata;
     amountOut = plan.amountOut;
