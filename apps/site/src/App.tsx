@@ -20,7 +20,11 @@ export function App() {
     // than threading a matchMedia check through each of the ~10 sections
     // that use entrance motion.
     <MotionConfig reducedMotion="user">
-      <div id="top" data-density="poster" className="relative min-h-screen overflow-x-hidden bg-forest-canopy text-white">
+      <div
+        id="top"
+        data-density="poster"
+        className="relative min-h-screen overflow-x-hidden bg-forest-canopy text-white"
+      >
         <NoiseFilters />
         <VideoBackground />
 

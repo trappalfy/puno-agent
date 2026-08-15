@@ -37,12 +37,7 @@ async function getOrCreateDemoVaultRow(): Promise<{ id: string; agent: string } 
   const [existing] = await db
     .select({ id: schema.vaults.id })
     .from(schema.vaults)
-    .where(
-      and(
-        eq(schema.vaults.address, demo.address),
-        eq(schema.vaults.network, TRIAL_NETWORK),
-      ),
-    )
+    .where(and(eq(schema.vaults.address, demo.address), eq(schema.vaults.network, TRIAL_NETWORK)))
     .limit(1);
 
   if (existing) return { id: existing.id, agent: demo.agent };

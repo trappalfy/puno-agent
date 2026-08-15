@@ -1,4 +1,5 @@
 # Assurestor — Style Reference
+
 > Electric terminal in a deep forest vault — lime phosphor on midnight olive.
 
 **Theme:** dark
@@ -7,19 +8,20 @@ Assurestor operates as a dark-mode command console: a deep forest-green canvas (
 
 ## Tokens — Colors
 
-| Name | Value | Token | Role |
-|------|-------|-------|------|
-| Forest Canopy | `#203400` | `--color-forest-canopy` | Primary page background, nav strip, footer canvas — the dominant surface that defines the entire brand atmosphere |
-| Vault Floor | `#1b2d00` | `--color-vault-floor` | Card surfaces, recessed panels, elevated content blocks within the forest canvas |
-| Canopy Mid | `#335400` | `--color-canopy-mid` | Elevated card variant, highlighted surface tier above the base canvas |
+| Name          | Value     | Token                   | Role                                                                                                                                           |
+| ------------- | --------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Forest Canopy | `#203400` | `--color-forest-canopy` | Primary page background, nav strip, footer canvas — the dominant surface that defines the entire brand atmosphere                              |
+| Vault Floor   | `#1b2d00` | `--color-vault-floor`   | Card surfaces, recessed panels, elevated content blocks within the forest canvas                                                               |
+| Canopy Mid    | `#335400` | `--color-canopy-mid`    | Elevated card variant, highlighted surface tier above the base canvas                                                                          |
 | Lime Phosphor | `#bdff00` | `--color-lime-phosphor` | Primary action buttons, active state indicators, illustrative highlight panels, brand-accent moments — the sole chromatic signal in the system |
-| Moss Border | `#586740` | `--color-moss-border` | Hairline dividers, list separators, subtle table borders — barely-there green-on-green rules |
-| Fern | `#73a303` | `--color-fern` | Secondary accent strokes, table emphasis borders, mid-saturation green used sparingly for variety within lime contexts |
-| White | `#ffffff` | `--color-white` | Body text, heading text, icon strokes, ghost button borders, link colors, input fields — the only neutral light tone in the palette |
+| Moss Border   | `#586740` | `--color-moss-border`   | Hairline dividers, list separators, subtle table borders — barely-there green-on-green rules                                                   |
+| Fern          | `#73a303` | `--color-fern`          | Secondary accent strokes, table emphasis borders, mid-saturation green used sparingly for variety within lime contexts                         |
+| White         | `#ffffff` | `--color-white`         | Body text, heading text, icon strokes, ghost button borders, link colors, input fields — the only neutral light tone in the palette            |
 
 ## Tokens — Typography
 
 ### Denim Ink — All interface text — from tiny labels to massive display headlines. The custom geometric face is the voice of the brand; weight 400 covers body and body-large, 600 for subheadings and emphasized inline, 700 reserved for the largest display moments. Extreme size jumps (40→64→86→94) create a poster-like hierarchy where the largest text dwarfs everything else on the page. · `--font-denim-ink`
+
 - **Substitute:** Space Grotesk, or Inter Tight as a fallback
 - **Weights:** 400, 600, 700
 - **Sizes:** 16px, 20px, 32px, 40px, 64px, 86px, 94px
@@ -28,6 +30,7 @@ Assurestor operates as a dark-mode command console: a deep forest-green canvas (
 - **Role:** All interface text — from tiny labels to massive display headlines. The custom geometric face is the voice of the brand; weight 400 covers body and body-large, 600 for subheadings and emphasized inline, 700 reserved for the largest display moments. Extreme size jumps (40→64→86→94) create a poster-like hierarchy where the largest text dwarfs everything else on the page.
 
 ### Courier New — Tiny monospaced labels (8px) for micro-annotations, likely near icons or status indicators. Ultra-tight tracking (-0.14em) at this size reads as a decorative tech-glitch element rather than readable text. · `--font-courier-new`
+
 - **Substitute:** JetBrains Mono, IBM Plex Mono
 - **Weights:** 400
 - **Sizes:** 8px
@@ -37,14 +40,14 @@ Assurestor operates as a dark-mode command console: a deep forest-green canvas (
 
 ### Type Scale
 
-| Role | Size | Line Height | Letter Spacing | Token |
-|------|------|-------------|----------------|-------|
-| body-sm | 16px | 1.5 | -0.32px | `--text-body-sm` |
-| body | 20px | 1.5 | -0.4px | `--text-body` |
-| subheading | 32px | 1.2 | -0.7px | `--text-subheading` |
-| heading-sm | 40px | 1.1 | -0.88px | `--text-heading-sm` |
-| heading | 64px | 1 | -1.35px | `--text-heading` |
-| display | 94px | 1 | -4.23px | `--text-display` |
+| Role       | Size | Line Height | Letter Spacing | Token               |
+| ---------- | ---- | ----------- | -------------- | ------------------- |
+| body-sm    | 16px | 1.5         | -0.32px        | `--text-body-sm`    |
+| body       | 20px | 1.5         | -0.4px         | `--text-body`       |
+| subheading | 32px | 1.2         | -0.7px         | `--text-subheading` |
+| heading-sm | 40px | 1.1         | -0.88px        | `--text-heading-sm` |
+| heading    | 64px | 1           | -1.35px        | `--text-heading`    |
+| display    | 94px | 1           | -4.23px        | `--text-display`    |
 
 ## Tokens — Spacing & Shapes
 
@@ -54,28 +57,28 @@ Assurestor operates as a dark-mode command console: a deep forest-green canvas (
 
 ### Spacing Scale
 
-| Name | Value | Token |
-|------|-------|-------|
-| 8 | 8px | `--spacing-8` |
-| 16 | 16px | `--spacing-16` |
-| 24 | 24px | `--spacing-24` |
-| 32 | 32px | `--spacing-32` |
-| 40 | 40px | `--spacing-40` |
-| 72 | 72px | `--spacing-72` |
-| 80 | 80px | `--spacing-80` |
-| 120 | 120px | `--spacing-120` |
-| 240 | 240px | `--spacing-240` |
+| Name | Value | Token           |
+| ---- | ----- | --------------- |
+| 8    | 8px   | `--spacing-8`   |
+| 16   | 16px  | `--spacing-16`  |
+| 24   | 24px  | `--spacing-24`  |
+| 32   | 32px  | `--spacing-32`  |
+| 40   | 40px  | `--spacing-40`  |
+| 72   | 72px  | `--spacing-72`  |
+| 80   | 80px  | `--spacing-80`  |
+| 120  | 120px | `--spacing-120` |
+| 240  | 240px | `--spacing-240` |
 
 ### Border Radius
 
-| Element | Value |
-|---------|-------|
-| tags | 12px |
-| cards | 32px |
-| pills | 9999px |
-| buttons | 16px |
-| body-blocks | 24px |
-| alternate-button | 20px |
+| Element          | Value  |
+| ---------------- | ------ |
+| tags             | 12px   |
+| cards            | 32px   |
+| pills            | 9999px |
+| buttons          | 16px   |
+| body-blocks      | 24px   |
+| alternate-button | 20px   |
 
 ### Layout
 
@@ -87,61 +90,73 @@ Assurestor operates as a dark-mode command console: a deep forest-green canvas (
 ## Components
 
 ### Lime Primary Button
+
 **Role:** High-emphasis action — booking calls, starting contact flows
 
 Filled #bdff00 background, #1b2d00 or #203400 text, 16px radius, padding 18px 32px. Denim Ink weight 400–600 at 16–18px. The only fully filled button in the system — use sparingly as the lime is rationed.
 
 ### Ghost Outline Button
+
 **Role:** Secondary action — press releases, read-more links, navigation
 
 Transparent background, 1px #ffffff border, #ffffff text, 16px radius, padding 18px 32px. Denim Ink weight 400. The default button for anything that isn't the page's single primary action.
 
 ### Pill Navigation Link
+
 **Role:** Top-nav items and supplementary action chips
 
 9999px radius, small padding (~10px horizontal), Denim Ink weight 400, #ffffff text on transparent background. No border on default nav items; the Login button uses the same pill shape but with a white 1px border.
 
 ### Featured Lime Panel
+
 **Role:** Decorative-content block — large visual moment with solid lime fill
 
 #bdff00 background, 32px radius, padding 40px. Contains illustration or large graphic. This is how the brand deploys lime as a large surface (not just a button), creating a phosphor-screen effect against the dark canvas.
 
 ### Dark Content Card
+
 **Role:** Section containers, content blocks, feature cards
 
 #1b2d00 or #203400 background, 32px radius, padding 40px. No border, no shadow — the card separates from the page purely through the subtle dark-green shift between vault floor and forest canopy. Text inside is #ffffff at body sizes.
 
 ### Elevated Accent Card
+
 **Role:** Highlighted variant for emphasis or hover/active states
 
 #335400 background, 32px radius, 40px padding. One tier brighter than the base card, used to mark active or featured content within card grids.
 
 ### Hairline Divider
+
 **Role:** Section separator, list rule, table border
 
 1px line in #586740 (moss border) or white at low opacity. Very low contrast — these dividers whisper rather than announce, maintaining the calm dark atmosphere.
 
 ### Active Dot Indicator
+
 **Role:** Status marker beside section labels ("NG Powered by HYCU", "360° Protection")
 
 8px solid #bdff00 circle, sits inline before a caption or label. Functions as a section's 'armed' indicator — the lime dot says this area is live/important.
 
 ### Section Eyebrow Label
+
 **Role:** Small green dot + tiny caption introducing each section
 
 #bdff00 dot (8px) + Denim Ink 8–16px caption in #ffffff, tight tracking. Always paired vertically (dot above text). Acts as a section's identifier badge.
 
 ### Headline Block
+
 **Role:** Hero and section headlines at display scale
 
 Denim Ink weight 600–700, 64–94px, line-height 1.0, letter-spacing -0.045em. #ffffff color. These headlines are massive and aggressively tracked-tight; they read as architectural statements, not flowing prose.
 
 ### Ghost Input Field
+
 **Role:** Form inputs, search fields, email capture
 
 Transparent or #203400 background, 1px #ffffff border, 12–16px radius, Denim Ink 16px white text. Padding ~10px vertical. Placeholder text in muted white.
 
 ### CTA Card / Feature Card with Image
+
 **Role:** Feature cards combining text and visual
 
 #1b2d00 surface, 32px radius, two-column internal layout (text left 60%, image right 40%) or stacked. 40px internal padding. No shadow — surface separation comes from color tier shift only.
@@ -149,6 +164,7 @@ Transparent or #203400 background, 1px #ffffff border, 12–16px radius, Denim I
 ## Do's and Don'ts
 
 ### Do
+
 - Use #bdff00 lime as the ONLY filled action color in the system; never substitute another hue for primary CTAs.
 - Set headlines at 64–94px with Denim Ink weight 600–700 and -0.045em tracking — the extreme size and tight tracking is the brand's visual signature.
 - Maintain the monochromatic green discipline: layer surfaces using #1b2d00 → #203400 → #335400, never introduce gray neutrals.
@@ -158,6 +174,7 @@ Transparent or #203400 background, 1px #ffffff border, 12–16px radius, Denim I
 - Allow sections to breathe with 80px vertical gaps and full-width dark bands — density comes from content, not from tight spacing.
 
 ### Don't
+
 - Never use #bdff00 as a large background outside of one featured decorative panel per page — rationing lime is what makes it feel like a signal.
 - Do not introduce drop shadows for elevation; the system separates layers through color tier shifts, not shadow depth.
 - Do not use gray (#808080, #999, etc.) for any UI element — the palette is green-monochrome plus white and lime only.
@@ -168,12 +185,12 @@ Transparent or #203400 background, 1px #ffffff border, 12–16px radius, Denim I
 
 ## Surfaces
 
-| Level | Name | Value | Purpose |
-|-------|------|-------|---------|
-| 1 | Forest Canopy | `#203400` | Base page background — the dominant canvas filling all viewports |
-| 2 | Vault Floor | `#1b2d00` | Card surfaces and recessed content blocks, one tier deeper than the canvas |
-| 3 | Canopy Mid | `#335400` | Elevated or active card states, highlighted content tiers |
-| 4 | Lime Phosphor | `#bdff00` | Featured decorative panel and primary action surface — the sole bright signal |
+| Level | Name          | Value     | Purpose                                                                       |
+| ----- | ------------- | --------- | ----------------------------------------------------------------------------- |
+| 1     | Forest Canopy | `#203400` | Base page background — the dominant canvas filling all viewports              |
+| 2     | Vault Floor   | `#1b2d00` | Card surfaces and recessed content blocks, one tier deeper than the canvas    |
+| 3     | Canopy Mid    | `#335400` | Elevated or active card states, highlighted content tiers                     |
+| 4     | Lime Phosphor | `#bdff00` | Featured decorative panel and primary action surface — the sole bright signal |
 
 ## Imagery
 
@@ -186,6 +203,7 @@ Full-bleed dark canvas with a centered max-width content column (~1280px). Navig
 ## Agent Prompt Guide
 
 Quick Color Reference:
+
 - text: #ffffff
 - background: #203400
 - card surface: #1b2d00
@@ -229,8 +247,12 @@ Quick Color Reference:
   --color-white: #ffffff;
 
   /* Typography — Font Families */
-  --font-denim-ink: 'Denim Ink', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-courier-new: 'Courier New', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-denim-ink:
+    "Denim Ink", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-courier-new:
+    "Courier New", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
 
   /* Typography — Scale */
   --text-body-sm: 16px;
@@ -313,8 +335,12 @@ Quick Color Reference:
   --color-white: #ffffff;
 
   /* Typography */
-  --font-denim-ink: 'Denim Ink', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-courier-new: 'Courier New', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-denim-ink:
+    "Denim Ink", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-courier-new:
+    "Courier New", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
 
   /* Typography — Scale */
   --text-body-sm: 16px;

@@ -50,7 +50,11 @@ function checkContrast(): boolean {
     const ratio = contrastRatio(fgHex, color.core.limePhosphor);
     if (ratio < WCAG_AA_LARGE_TEXT_OR_UI) allPass = false;
     const verdict =
-      ratio >= WCAG_AA_TEXT ? "PASS text" : ratio >= WCAG_AA_LARGE_TEXT_OR_UI ? "PASS large/UI only" : "FAIL";
+      ratio >= WCAG_AA_TEXT
+        ? "PASS text"
+        : ratio >= WCAG_AA_LARGE_TEXT_OR_UI
+          ? "PASS large/UI only"
+          : "FAIL";
     console.log(`  ${fgName} on lime-phosphor: ${ratio.toFixed(2)}:1 — ${verdict}`);
   }
 

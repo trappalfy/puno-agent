@@ -29,7 +29,7 @@ There is no branch for a real router. The file's own comment states the gap plai
 > swapCalldata targets MockRouter.swap directly (testnet-only stand-in) … **Phase 4 replaces
 > this with calldata from a real router's quote API.**
 
-Meanwhile the production wizard writes the *real* 1inch router into the vault policy —
+Meanwhile the production wizard writes the _real_ 1inch router into the vault policy —
 `apps/web/src/app/app/agents/new/page.tsx:296`, `allowedRouters: [network.routers.oneInch]`
 — and `risk.ts:75` picks `allowedRouters[0]`.
 
@@ -102,9 +102,9 @@ override with no liquidity behind it. Nothing to fix in code — it is a sequenc
 >
 > Observed directly: three consecutive triggers (`price_moved:AAPL:8.00%`,
 > `quote_freed:$800.00`, `price_moved:AAPL:21.50%`) all declined, each citing the missing
-> history — *"you hold no AAPL position and have no stated thesis on it"*. After the fix the
-> very next trigger escalated, citing the restored memory: *"AAPL moved 7.69% right after you
-> decided to buy it in dry-run mode 16 minutes ago"*.
+> history — _"you hold no AAPL position and have no stated thesis on it"_. After the fix the
+> very next trigger escalated, citing the restored memory: _"AAPL moved 7.69% right after you
+> decided to buy it in dry-run mode 16 minutes ago"_.
 >
 > **Fix:** `getRecentDecisions()` in `db/queries.ts` (left-joined to `trades` so the summary
 > carries whether the decision actually filled) and `formatRecentDecisions()` in
@@ -146,7 +146,7 @@ Default lowered to **0.1**, documented in `.env.example` and `apps/agent/README.
 `compare:report` empty-state message corrected: it told the reader one L2 decision was enough,
 which was true at rate 1 and is not at 0.1. Set the rate to 1 in development.
 
-Worth doing in this order: D5's intermittent failures were dropping the *verbose* replies and
+Worth doing in this order: D5's intermittent failures were dropping the _verbose_ replies and
 keeping the terse ones, so the sample was biased before it was small. Fixing D5 first is what
 makes a 10% sample honest.
 
@@ -164,7 +164,7 @@ below.
 ### D4 — `PunoCredits.deposit` reverts when the payer is the treasury
 
 `PunoCredits.deposit` measures what arrived as the treasury's balance delta
-(`PunoCredits.sol:66-73`) — correct fee-on-transfer handling. But when `msg.sender` *is* the
+(`PunoCredits.sol:66-73`) — correct fee-on-transfer handling. But when `msg.sender` _is_ the
 treasury the transfer is a self-transfer, the delta is zero, and `require(received > 0)`
 fires with `PunoCredits: nothing received`.
 
@@ -184,13 +184,13 @@ real cause.
 
 Deployed and verified against chain 46630 by execution:
 
-| Contract | Address |
-|---|---|
-| VaultFactory | `0x486901cBa710C5Fb1032AB1bB25d190E3f845998` |
-| PunoCredits | `0xD0D4B491D8980cd49b0eCf151ad30f8f779D74f6` |
-| Mock PUNO | `0x1A480B089d8A5E2B77A1bD8908aBFF9bB6af21da` |
-| Demo AgentVault | `0xcFA434255f47F4C8777043540d253CEDFb36B5e9` |
-| MockRouter | `0x58fc3D03E57aC4b909b04356CF9Ae8b420885719` |
+| Contract          | Address                                      |
+| ----------------- | -------------------------------------------- |
+| VaultFactory      | `0x486901cBa710C5Fb1032AB1bB25d190E3f845998` |
+| PunoCredits       | `0xD0D4B491D8980cd49b0eCf151ad30f8f779D74f6` |
+| Mock PUNO         | `0x1A480B089d8A5E2B77A1bD8908aBFF9bB6af21da` |
+| Demo AgentVault   | `0xcFA434255f47F4C8777043540d253CEDFb36B5e9` |
+| MockRouter        | `0x58fc3D03E57aC4b909b04356CF9Ae8b420885719` |
 | Mock USDG (quote) | `0x5fecF7bA6365E6763b8984c43307B417A498aD40` |
 
 Actual deploy cost **0.0001124 ETH**, against the 0.000270 estimate — forge's padding is
@@ -222,13 +222,13 @@ All three charge types landed in the ledger: `screen` ×5 at $0.01, `decision` �
 
 **Measured cost against what the user was charged:**
 
-| Level | Model | Calls | Our cost | Charged | Margin |
-|---|---|---:|---:|---:|---:|
-| L1 `screen` | Haiku 4.5 | 5 | $0.016026 | $0.05 | 67.9% |
-| L2 `decision` | Opus 5 | 2 | $0.038162 | $1.00 | **96.2%** |
-| L2 `comparison` | Haiku 4.5 | 1 | $0.002819 | — | our cost, never billed |
-| `trade` (gas) | — | 1 | ~$0.005 | $0.25 | ~98% |
-| **Total** | | | **$0.057007** | **$1.30** | **95.6%** |
+| Level           | Model     | Calls |      Our cost |   Charged |                 Margin |
+| --------------- | --------- | ----: | ------------: | --------: | ---------------------: |
+| L1 `screen`     | Haiku 4.5 |     5 |     $0.016026 |     $0.05 |                  67.9% |
+| L2 `decision`   | Opus 5    |     2 |     $0.038162 |     $1.00 |              **96.2%** |
+| L2 `comparison` | Haiku 4.5 |     1 |     $0.002819 |         — | our cost, never billed |
+| `trade` (gas)   | —         |     1 |       ~$0.005 |     $0.25 |                   ~98% |
+| **Total**       |           |       | **$0.057007** | **$1.30** |              **95.6%** |
 
 Per-call detail, first decision vs. cached: input 584 / output 240 / cache **write** 1,555 =
 $0.024470; the same call with a cache **read** instead prices at **$0.0097**. The prompt-cache
@@ -265,8 +265,7 @@ purpose: it failed unevenly, precisely on the verbose outputs most worth compari
 and the real L2 decision use the same schema through the same `decide()`. The L2 call at
 `tick.ts:396` is not wrapped in a try/catch, so the same violation from Opus aborts the tick.
 `main.ts:12-18` catches it per agent, so nothing crashes, but by then the user has been
-charged for the screening call and gets no decision for it. `ScreenOutputSchema.reason` (max
-280) had the identical exposure one step earlier.
+charged for the screening call and gets no decision for it. `ScreenOutputSchema.reason` (max 280) had the identical exposure one step earlier.
 
 Root cause, and the part worth remembering: **structured output constrains shape, not string
 length.** `zodOutputFormat()` emits `maxLength` into the JSON Schema, the API does not enforce

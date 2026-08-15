@@ -3,7 +3,12 @@ import { PRICES_USD } from "@puno/shared";
 import { SectionEyebrow } from "../primitives/SectionEyebrow";
 import { COST_TIERS } from "../../lib/copy";
 
-const CHIPS = ["Deterministic checks first", "Cheap model screens", "Flagship only on escalation", "Every rejection logged"];
+const CHIPS = [
+  "Deterministic checks first",
+  "Cheap model screens",
+  "Flagship only on escalation",
+  "Every rejection logged",
+];
 
 export function CostRouting() {
   return (

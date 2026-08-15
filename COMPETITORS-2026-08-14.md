@@ -22,13 +22,13 @@ structural advantages for us, and three gaps are real.
 
 **Multi-stage pipelines are the norm, and ours is on the simple end.**
 
-| Product | Pipeline |
-|---|---|
-| HyperAgent | Market Data → **Analyst AI** → **Boss AI** → Executor, with a running cycles counter |
+| Product    | Pipeline                                                                                                                |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| HyperAgent | Market Data → **Analyst AI** → **Boss AI** → Executor, with a running cycles counter                                    |
 | AgentFloor | Four independent analysts (Fundamentals, Sentiment, News, Technical) → **Bull/Bear debate** → risk desk → final verdict |
-| **Puno** | **L1 Haiku screen → L2 Opus decision → risk engine → simulation** |
+| **Puno**   | **L1 Haiku screen → L2 Opus decision → risk engine → simulation**                                                       |
 
-Our two-tier split is the same family of design. What differs is *why*: theirs is about
+Our two-tier split is the same family of design. What differs is _why_: theirs is about
 analytical breadth (more perspectives), ours is about **cost asymmetry** — L1 exists so the
 expensive model is not called on every tick. Nobody else describes their staging in cost terms,
 which fits: they mostly sell subscriptions, so per-call cost is not the user's problem.
@@ -48,7 +48,7 @@ all execute. We execute — so the honest peer group is the second one.
 **This is our first real structural advantage.** Our limits — `maxNotionalPerTrade`,
 `maxDailyNotional`, `maxPositionBps`, `minSecondsBetweenTrades`, the oracle floor — are enforced
 by `AgentVault` itself, and `withdraw` is `onlyOwner`. A TEE or an MPC policy engine protects the
-user *as long as the operator behaves and stays online*. A contract keeps enforcing if we vanish
+user _as long as the operator behaves and stays online_. A contract keeps enforcing if we vanish
 or turn hostile. Only Safe is in the same position, and Safe is a general smart account rather
 than a trading product.
 
@@ -102,7 +102,7 @@ Everything below is standard across the category. None of it is ours.
   which tokens are tradable, per-trade and per-day spend, and whether execution needs approval.
   We have `agents.dry_run` in the database and a badge, and no way for a user to flip it.
 - **Explicit disagreement surfacing.** AgentFloor's "Markov Regime Check" marks the AI narrative
-  against quantitative signals as *Confirms / Conflicts / Neutral*. We compute something adjacent
+  against quantitative signals as _Confirms / Conflicts / Neutral_. We compute something adjacent
   — the Haiku/Opus comparison replay — and show the user nothing.
 - **Audit trails.** Cobo records "Who, What, When, Why, and Which Rule" per decision, with
   human-in-the-loop approvals via Web, Mobile, Telegram and Discord. We have an `audit_log` table
@@ -117,7 +117,7 @@ Everything below is standard across the category. None of it is ours.
    entire pitch is "trade with proof, not promises", this is the largest hole — and unlike the
    others it cannot be closed by writing code, only by accumulating history. Start recording now.
 2. **Nothing is visible before connecting a wallet.** HyperAgent has a public live demo.
-   Our free tier is lower-friction than a signup *once you have a wallet*, but a visitor with no
+   Our free tier is lower-friction than a signup _once you have a wallet_, but a visitor with no
    wallet sees nothing at all. A read-only public demo of the demo vault would cost us nothing —
    the data already exists.
 3. **No approval mode.** "Require approval before executing" is a standard control we lack

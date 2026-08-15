@@ -30,7 +30,10 @@ export function CtaButton({
   return (
     <a href={href} className={`${base} ${variants[variant]} ${full ? "w-full" : ""} ${className}`}>
       {label}
-      <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-[1px]" aria-hidden />
+      <ChevronRight
+        className="w-4 h-4 transition-transform group-hover:translate-x-[1px]"
+        aria-hidden
+      />
     </a>
   );
 }

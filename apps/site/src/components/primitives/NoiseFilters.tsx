@@ -12,18 +12,25 @@ export function NoiseFilters() {
       <defs>
         {/* Headline sweep — subtle grain, multiply blend. */}
         <filter id="noise-headline">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves={2} stitchTiles="stitch" />
-          <feColorMatrix
-            type="matrix"
-            values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.35 0"
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.9"
+            numOctaves={2}
+            stitchTiles="stitch"
           />
+          <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.35 0" />
           <feComposite in2="SourceGraphic" operator="in" result="noise" />
           <feBlend in="SourceGraphic" in2="noise" mode="multiply" />
         </filter>
 
         {/* Pricing watermark — heavier grain, overlay blend. */}
         <filter id="noise-watermark">
-          <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves={2} stitchTiles="stitch" />
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.5"
+            numOctaves={2}
+            stitchTiles="stitch"
+          />
           <feComponentTransfer>
             <feFuncA type="linear" slope="0.075" />
           </feComponentTransfer>

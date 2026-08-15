@@ -30,8 +30,7 @@ export async function market(vault: Address, tokens: Address[]): Promise<MarketP
       // _normalizedPrice does on-chain. Using one threshold for all of them
       // would mark a healthy 24h-heartbeat quote feed stale here while the
       // vault happily traded on it — or the reverse, which is worse.
-      const stale =
-        nowSec - reading.updatedAt > meta.maxStalenessSeconds || reading.answer <= 0n;
+      const stale = nowSec - reading.updatedAt > meta.maxStalenessSeconds || reading.answer <= 0n;
       return {
         token,
         symbol,

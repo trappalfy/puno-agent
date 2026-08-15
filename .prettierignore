@@ -11,3 +11,10 @@ coverage
 contracts/
 pnpm-lock.yaml
 
+# Generator output. Formatting these would make `format:check` pass exactly
+# once: drizzle-kit and generate:css re-emit them in their own style, so the
+# check would fail again on the next migration or token change, and the diff
+# would be noise nobody wrote. tailwind-theme.css says so in its own header.
+apps/agent/drizzle/
+packages/shared/src/design/generated/
+

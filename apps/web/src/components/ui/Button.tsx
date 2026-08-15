@@ -31,8 +31,7 @@ const variants: Record<Variant, string> = {
   primary: "bg-lime-phosphor text-vault-floor font-semibold hover:opacity-90",
   // "1px #ffffff border" — full white, not a tinted one.
   ghost: "border border-white text-white hover:border-lime-phosphor hover:text-lime-phosphor",
-  danger:
-    "border border-signal-red text-signal-red hover:bg-signal-red hover:text-vault-floor",
+  danger: "border border-signal-red text-signal-red hover:bg-signal-red hover:text-vault-floor",
 };
 
 /**

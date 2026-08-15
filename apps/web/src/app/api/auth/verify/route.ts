@@ -34,7 +34,10 @@ export async function POST(request: Request) {
   const issuedAt = body?.issuedAt;
 
   if (!address || !ADDRESS_RE.test(address) || !signature || !issuedAt) {
-    return NextResponse.json({ error: "address, signature and issuedAt are required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "address, signature and issuedAt are required" },
+      { status: 400 },
+    );
   }
   if (!isFreshIssuedAt(issuedAt)) {
     return NextResponse.json({ error: "sign-in request expired — try again" }, { status: 400 });
@@ -48,7 +51,10 @@ export async function POST(request: Request) {
     ?.slice(NONCE_COOKIE.length + 1);
 
   if (!nonce) {
-    return NextResponse.json({ error: "no sign-in in progress — request a nonce first" }, { status: 400 });
+    return NextResponse.json(
+      { error: "no sign-in in progress — request a nonce first" },
+      { status: 400 },
+    );
   }
 
   const url = new URL(request.url);
@@ -63,7 +69,11 @@ export async function POST(request: Request) {
 
   let valid = false;
   try {
-    valid = await verifyMessage({ address: address as `0x${string}`, message, signature: signature as `0x${string}` });
+    valid = await verifyMessage({
+      address: address as `0x${string}`,
+      message,
+      signature: signature as `0x${string}`,
+    });
   } catch {
     valid = false;
   }

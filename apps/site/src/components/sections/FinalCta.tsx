@@ -27,8 +27,8 @@ export function FinalCta() {
             not promises.
           </h2>
           <p className="mt-6 text-white/60 max-w-md mx-auto text-sm leading-[1.6]">
-            See it read a real portfolio, argue a position and check itself against on-chain
-            limits — one decision, free, nothing deployed. Then set your own limits and let it run.
+            See it read a real portfolio, argue a position and check itself against on-chain limits
+            — one decision, free, nothing deployed. Then set your own limits and let it run.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <CtaButton href={links.tryAgent} label="Watch it make one decision" />

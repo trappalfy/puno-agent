@@ -87,10 +87,7 @@ export interface RecentDecision {
 /// holds zero of and has no stated interest in", and stated interest can only
 /// come from here. An agent whose first decision never filled would otherwise
 /// go permanently silent.
-export async function getRecentDecisions(
-  agentId: string,
-  limit = 3,
-): Promise<RecentDecision[]> {
+export async function getRecentDecisions(agentId: string, limit = 3): Promise<RecentDecision[]> {
   const rows = await db
     .select({
       action: schema.decisions.action,

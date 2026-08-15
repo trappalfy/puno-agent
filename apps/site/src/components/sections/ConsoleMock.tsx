@@ -1,14 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import {
-  Sparkles,
-  Search,
-  Star,
-  Archive,
-  Trash2,
-  MoreHorizontal,
-  FileText,
-} from "lucide-react";
+import { Sparkles, Search, Star, Archive, Trash2, MoreHorizontal, FileText } from "lucide-react";
 import { STRATEGIES, SIGNALS } from "../../lib/copy";
 
 const NAV_ITEMS = [
@@ -174,10 +166,7 @@ export function ConsoleMock() {
                 <p className="mt-2 text-xs text-white/70 leading-[1.5]">{signal.preview}</p>
                 <div className="mt-3 flex items-center gap-2">
                   <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full bg-lime-phosphor"
-                      style={{ width: `${CONFIDENCE}%` }}
-                    />
+                    <div className="h-full bg-lime-phosphor" style={{ width: `${CONFIDENCE}%` }} />
                   </div>
                   <span className="text-[11px] text-white/50 font-jetbrains-mono tabular-nums">
                     {CONFIDENCE}% confidence

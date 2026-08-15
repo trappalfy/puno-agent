@@ -364,9 +364,7 @@ describe("reconcile", () => {
     // Guards the guard: if this passed unconditionally it would hide exactly
     // the bug the check exists to catch.
     await grantStarterCredit(db, otherId, 3);
-    await db.execute(
-      sql`update accounts set credit_balance_usd = 999 where id = ${otherId}::uuid`,
-    );
+    await db.execute(sql`update accounts set credit_balance_usd = 999 where id = ${otherId}::uuid`);
     const { balanced } = await reconcile(db, otherId);
     assert.equal(balanced, false);
   });

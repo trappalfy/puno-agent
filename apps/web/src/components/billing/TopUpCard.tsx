@@ -1,12 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  useAccount,
-  useReadContract,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import { erc20Abi, punoCreditsAbi } from "@puno/shared";
 import type { Address } from "viem";
@@ -115,7 +110,9 @@ export function TopUpCard() {
       <div className="mt-[var(--spacing-16)] flex items-baseline justify-between">
         <span className="text-app-body-sm text-white-muted">You send</span>
         <span className="text-num-sm text-white font-jetbrains-mono tabular-nums">
-          {amountRaw !== null ? `${formatTokens(amountRaw.toString(), 4)} PUNO` : "rate unavailable"}
+          {amountRaw !== null
+            ? `${formatTokens(amountRaw.toString(), 4)} PUNO`
+            : "rate unavailable"}
         </span>
       </div>
       {tokenBalance !== undefined && (

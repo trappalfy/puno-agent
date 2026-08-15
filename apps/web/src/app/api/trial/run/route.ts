@@ -15,10 +15,7 @@ export async function POST() {
   if (!auth.ok) return auth.response;
   const { account } = auth;
 
-  const availability = await checkTrialAvailability(
-    account.id,
-    Number(account.creditBalanceUsd),
-  );
+  const availability = await checkTrialAvailability(account.id, Number(account.creditBalanceUsd));
 
   if (!availability.available) {
     // 402 for "used up" as well as "too little credit": both mean the same

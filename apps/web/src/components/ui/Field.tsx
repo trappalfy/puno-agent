@@ -40,13 +40,13 @@ export function Field({
           inside the same visual box as the input itself. */}
       <span
         className={`flex items-center gap-[var(--spacing-8)] rounded-[var(--radius-tags)] border bg-forest-canopy px-[var(--spacing-12)] py-[var(--spacing-8)] transition-colors ${
-          error
-            ? "border-signal-red"
-            : "border-moss-border focus-within:border-lime-phosphor"
+          error ? "border-signal-red" : "border-moss-border focus-within:border-lime-phosphor"
         }`}
       >
         {prefix && (
-          <span className="shrink-0 text-num-sm text-white-faint font-jetbrains-mono">{prefix}</span>
+          <span className="shrink-0 text-num-sm text-white-faint font-jetbrains-mono">
+            {prefix}
+          </span>
         )}
         <input
           {...props}

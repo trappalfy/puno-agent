@@ -45,10 +45,7 @@ export async function POST(request: Request) {
       hash: txHash as `0x${string}`,
     });
   } catch {
-    return NextResponse.json(
-      { error: "Transaction not found or not yet mined." },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: "Transaction not found or not yet mined." }, { status: 404 });
   }
 
   if (receipt.status !== "success") {
