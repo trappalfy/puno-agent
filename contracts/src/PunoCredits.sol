@@ -64,6 +64,18 @@ contract PunoCredits is Ownable2Step, ReentrancyGuard {
         require(amount >= minDeposit, "PunoCredits: below minimum");
 
         address treasury_ = treasury;
+        // Checked explicitly, ahead of the transfer, because the failure it
+        // prevents is otherwise unreadable: a self-transfer moves the treasury's
+        // balance to itself, the delta below is zero, and the deposit reverts
+        // with "nothing received" — which points at a fee-on-transfer token
+        // rather than at the real cause. Hit for real on testnet 2026-08-14,
+        // where DeployTestnet made the deployer both payer and treasury and the
+        // billing path could not be exercised at all until it was rotated.
+        //
+        // It is also a genuine invariant, not just ergonomics: crediting the
+        // treasury for paying itself would mint balance out of nothing.
+        require(msg.sender != treasury_, "PunoCredits: payer is the treasury");
+
         uint256 balanceBefore = token.balanceOf(treasury_);
         token.safeTransferFrom(msg.sender, treasury_, amount);
         received = token.balanceOf(treasury_) - balanceBefore;

@@ -24,6 +24,10 @@ import { PunoCredits } from "../src/PunoCredits.sol";
 ///
 /// Optional, once PUNO exists — deploys the billing contract in the same run:
 ///   PUNO_TOKEN_ADDRESS=0x... PUNO_TREASURY=0x... PUNO_MIN_DEPOSIT=<wei>
+///
+/// Strongly recommended alongside it — starts handing PunoCredits off the hot
+/// deployer key in the same transaction that creates it:
+///   PUNO_OWNER=0x<multisig>
 contract DeployMainnet is Script {
     /// @dev Global Dollar on Robinhood Chain mainnet, verified against
     /// https://docs.robinhood.com/chain/connecting and mirrored in
@@ -45,8 +49,14 @@ contract DeployMainnet is Script {
         address punoToken = vm.envOr("PUNO_TOKEN_ADDRESS", address(0));
         address treasury = vm.envOr("PUNO_TREASURY", address(0));
         uint256 minDeposit = vm.envOr("PUNO_MIN_DEPOSIT", uint256(0));
+        // Where PunoCredits ownership should end up. Whoever owns it can move
+        // the treasury and therefore redirect every payment, so leaving it on
+        // the key that happens to be in a .env file is the single largest
+        // standing risk in the deployment.
+        address punoOwner = vm.envOr("PUNO_OWNER", address(0));
         if (punoToken != address(0)) {
             require(treasury != address(0), "DeployMainnet: PUNO_TREASURY required with token");
+            require(punoOwner != deployer, "DeployMainnet: PUNO_OWNER must not be the deployer");
         }
 
         vm.startBroadcast(deployerKey);
@@ -55,7 +65,20 @@ contract DeployMainnet is Script {
 
         address credits = address(0);
         if (punoToken != address(0)) {
-            credits = address(new PunoCredits(punoToken, treasury, minDeposit));
+            PunoCredits c = new PunoCredits(punoToken, treasury, minDeposit);
+            credits = address(c);
+
+            // Two-step by design (Ownable2Step), and the second step is not
+            // ours to take: the deployer stays owner until `punoOwner` calls
+            // acceptOwnership() itself. That is the property worth having — a
+            // typo'd or unreachable address cannot brick the contract, because
+            // nothing has been given away until someone proves they hold it.
+            //
+            // Which also means this is not finished at deploy time. Verify with
+            // `cast call <credits> "owner()"` after the multisig accepts.
+            if (punoOwner != address(0)) {
+                c.transferOwnership(punoOwner);
+            }
         }
 
         vm.stopBroadcast();
@@ -69,6 +92,15 @@ contract DeployMainnet is Script {
         } else {
             console.log("PunoCredits         ", credits);
             console.log("Treasury            ", treasury);
+            if (punoOwner == address(0)) {
+                console.log("");
+                console.log("WARNING: PUNO_OWNER was not set, so PunoCredits is owned by the");
+                console.log("deployer's hot key. Whoever owns it can redirect every payment.");
+                console.log("Run transferOwnership() to a multisig before taking real money.");
+            } else {
+                console.log("Ownership offered to", punoOwner);
+                console.log("NOT YET TRANSFERRED - that address must call acceptOwnership().");
+            }
         }
         console.log("");
         console.log("Next: write these into packages/shared/src/network/config.ts");

@@ -37,13 +37,24 @@ can fill differently.
 
 ### Security and ownership — must happen before mainnet money
 
-- [ ] **Transfer `PunoCredits` ownership off the hot `.env` key** using `Ownable2Step`. Whoever
-      owns `PunoCredits` owns credit issuance.
+- [ ] **Transfer `PunoCredits` ownership off the hot `.env` key.** Whoever owns it can move the
+      treasury and therefore redirect every payment.
+      **Correction 2026-08-15: the contract already extended `Ownable2Step`** — this was never
+      code work, and the checklist's earlier wording implied otherwise. What was missing, and is
+      now done, is that `DeployMainnet` accepts `PUNO_OWNER` and calls `transferOwnership` in the
+      deploy transaction (refusing an owner equal to the deployer), and warns loudly when it is
+      unset. **Still open, and operational:** there is no multisig address yet, and two-step
+      means the handover is _not complete_ until that address calls `acceptOwnership()` itself —
+      until then the deployer's hot key still controls the treasury. Verify with
+      `cast call <credits> "owner()"`, never by reading the deploy log.
 - [ ] **Contract audit.** Scope grew with `PunoCredits`; the $10–30k estimate roughly holds.
 - [ ] **Fuzz tests on `AgentVault` arithmetic** — never written.
-- [ ] **`DeployTestnet` deploys with `treasury == deployer`** (D4), so `PunoCredits.deposit`
-      reverts on a self-transfer and the billing path is untestable out of the box. Fix belongs in
-      the script, not the contract. Also worth a clearer revert string than "nothing received".
+- [x] **`DeployTestnet` deployed with `treasury == deployer`** (D4). **Done 2026-08-15.** The
+      script now requires `PUNO_TREASURY` and refuses one equal to the deployer, checked before
+      broadcasting. `PunoCredits.deposit` also rejects `msg.sender == treasury` by name instead of
+      failing later with "nothing received", which pointed at a fee-on-transfer token rather than
+      the real cause. **Breaking for anyone re-running the script** — set `PUNO_TREASURY`; the
+      existing testnet one is `0x2169f2d6c60600f7194bF76e66287a64513B5eA9`.
 - [ ] **`DeployTestnet` never calls `setAgent`** — the demo vault ships unarmed and `guard()`
       blocks every tick until an owner arms a key by hand.
 
@@ -123,7 +134,7 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | `pnpm -r typecheck`                  | 4/4 projects clean                     |
 | `pnpm lint`                          | clean                                  |
 | `pnpm test`                          | **143** — shared 63, agent 74, web 6   |
-| `forge test -vv` (from `contracts/`) | **74/74**                              |
+| `forge test -vv` (from `contracts/`) | **79/79**                              |
 | `pnpm -r build`                      | both apps build; `web` emits 20 routes |
 
 If a count is _lower_ than the number above, tests were deleted or skipped — investigate before

@@ -54,6 +54,12 @@ contract DeployTestnet is Script {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
 
+        // Read and checked before broadcasting, so a bad configuration costs
+        // nothing rather than failing halfway through a multi-contract deploy.
+        address treasury = vm.envAddress("PUNO_TREASURY");
+        require(treasury != address(0), "DeployTestnet: PUNO_TREASURY is zero");
+        require(treasury != deployer, "DeployTestnet: PUNO_TREASURY must not be the deployer");
+
         vm.startBroadcast(deployerKey);
 
         MockStockToken usdg = new MockStockToken("Mock Global Dollar", "USDG", 6);
@@ -105,8 +111,16 @@ contract DeployTestnet is Script {
         // Billing sandbox: a stand-in PUNO plus the payment contract, so the
         // approve -> deposit -> watcher -> credit path can be exercised without
         // waiting for the real token. The deployer gets the supply to test with.
+        //
+        // The treasury must not be the deployer — that was D4. A deposit paid by
+        // the treasury is a self-transfer, so the balance delta is zero and
+        // `deposit` reverts. With the deployer holding the whole PUNO supply
+        // *and* receiving it, the billing path was untestable out of the box on
+        // 2026-08-14 and had to be rescued with setTreasury after the fact.
+        // Required rather than defaulted, because there is no address this
+        // script could invent that anyone would hold the key to.
         MockStockToken puno = new MockStockToken("Mock Puno Token", "PUNO", 18);
-        PunoCredits credits = new PunoCredits(address(puno), deployer, PUNO_MIN_DEPOSIT);
+        PunoCredits credits = new PunoCredits(address(puno), treasury, PUNO_MIN_DEPOSIT);
         puno.mint(deployer, PUNO_MINT);
 
         vm.stopBroadcast();

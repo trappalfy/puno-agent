@@ -69,6 +69,41 @@ contract PunoCreditsTest is Test {
     // Deposit
     // ---------------------------------------------------------------------
 
+    /// D4. Hit for real on testnet 2026-08-14: DeployTestnet made the deployer
+    /// both the payer and the treasury, so the only account holding PUNO could
+    /// not deposit and the billing path was untestable out of the box.
+    ///
+    /// The failure it used to produce was "nothing received", which points at a
+    /// fee-on-transfer token and not at the real cause. The named check has to
+    /// come *before* the transfer, or the self-transfer happens first and the
+    /// zero delta wins the race to revert.
+    function test_Deposit_RejectsTheTreasuryPayingItself() public {
+        puno.mint(treasury, 1_000e18);
+        vm.prank(treasury);
+        puno.approve(address(credits), type(uint256).max);
+
+        vm.prank(treasury);
+        vm.expectRevert("PunoCredits: payer is the treasury");
+        credits.deposit(500e18);
+    }
+
+    function test_Deposit_TreasuryMayPayOnceRotatedAway() public {
+        // The check is against the *current* treasury, not a frozen address, so
+        // rotating custody frees the old one to become an ordinary payer. This
+        // is exactly the workaround used to rescue the testnet deployment.
+        address newTreasury = makeAddr("newTreasury");
+        credits.setTreasury(newTreasury);
+
+        puno.mint(treasury, 1_000e18);
+        vm.prank(treasury);
+        puno.approve(address(credits), type(uint256).max);
+
+        vm.prank(treasury);
+        credits.deposit(500e18);
+
+        assertEq(puno.balanceOf(newTreasury), 500e18);
+    }
+
     function test_Deposit_MovesTokensToTreasury() public {
         vm.prank(alice);
         credits.deposit(500e18);
@@ -251,6 +286,47 @@ contract PunoCreditsTest is Test {
         vm.prank(bob);
         credits.acceptOwnership();
         assertEq(credits.owner(), bob);
+    }
+
+    /// The half of two-step ownership that is easy to misread as "done".
+    ///
+    /// DeployMainnet calls transferOwnership in the deploy transaction, and its
+    /// console output says so — which invites reading the handover as complete.
+    /// It is not: until the nominee accepts, the deployer's hot key still moves
+    /// the treasury, and therefore still redirects every payment. Pinned so the
+    /// deploy script's wording can never quietly become true early.
+    function test_OwnershipTransfer_OldOwnerKeepsControlUntilAccepted() public {
+        credits.transferOwnership(bob);
+
+        address interim = makeAddr("interim");
+        credits.setTreasury(interim);
+        assertEq(credits.treasury(), interim, "nominating an owner must not disarm the current one");
+
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        credits.setTreasury(treasury);
+    }
+
+    function test_OwnershipTransfer_OldOwnerIsPowerlessAfterAcceptance() public {
+        credits.transferOwnership(bob);
+        vm.prank(bob);
+        credits.acceptOwnership();
+
+        // This is the assertion the whole pre-mainnet item exists for: after a
+        // completed handover the key that deployed the contract can no longer
+        // point payments anywhere.
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, owner));
+        credits.setTreasury(alice);
+    }
+
+    function test_OwnershipTransfer_OnlyTheNomineeMayAccept() public {
+        credits.transferOwnership(bob);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
+        credits.acceptOwnership();
+
+        assertEq(credits.owner(), owner);
     }
 
     // ---------------------------------------------------------------------
