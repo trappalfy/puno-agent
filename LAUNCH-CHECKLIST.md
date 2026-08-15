@@ -75,7 +75,7 @@ hosted**, with a shared service key:
 
 - [x] **Mainnet `serviceAgent` — done 2026-08-15.** `0x0aCd6ea59305B882FDC42e78b209Ec9bC39926a8`,
       generated fresh and used on no other chain. The private half went straight from `cast wallet
-    new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed with
+new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed with
       `git check-ignore`) and has never been through a clipboard or a chat — which is the whole
       point, given how the August incident worked. Checked distinct from the old deployer, the
       attacker, the current deployer and the testnet agent.
@@ -101,7 +101,21 @@ hosted**, with a shared service key:
       means the handover is _not complete_ until that address calls `acceptOwnership()` itself —
       until then the deployer's hot key still controls the treasury. Verify with
       `cast call <credits> "owner()"`, never by reading the deploy log.
-- [ ] **Contract audit.** Scope grew with `PunoCredits`; the $10–30k estimate roughly holds.
+- [ ] **Contract audit.** Scope package written 2026-08-16: **`AUDIT-SCOPE-2026-08-16.md`** — send
+      that, not a repo link. Measured scope is **430 nSLOC across 3 contracts, 24 external
+      functions**, frozen at `41fbe9a`, no proxies and no upgradeability. That is small, and the
+      $10–30k estimate should be re-quoted against the real number rather than carried forward.
+      The document states our known issues in full on purpose: rediscovering them is the most
+      expensive way to spend an engagement.
+      **Two things to settle before sending:**
+- [ ] **Decide on the dead fee mechanism** (`setFeeConfig`/`collectFee`). Never active, cannot
+      serve billing (`onlyOwner` where the owner is the user), and it is a **second path by which
+      the quote token leaves a vault** — which is exactly the claim the audit should be able to
+      make without qualification. It also already carries a documented accounting gap. Deleting it
+      drops ~52 source lines, 4 storage slots, 2 events and a 120-line test file. Recommended.
+- [ ] **Freeze `contracts/` for the duration.** An auditor reviewing a commit that is not the one
+      deployed has written a report about nothing. Update the freeze line in the scope doc if the
+      tree moves.
 - [x] **Fuzz tests on `AgentVault` arithmetic. Done 2026-08-15** —
       `test/AgentVault.Arithmetic.t.sol`, 9 properties at 256 runs each, covering feed-decimal
       normalisation, the oracle floor (never above fair value, exact at zero slippage, monotonic
