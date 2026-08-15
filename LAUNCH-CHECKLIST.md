@@ -101,21 +101,36 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       means the handover is _not complete_ until that address calls `acceptOwnership()` itself —
       until then the deployer's hot key still controls the treasury. Verify with
       `cast call <credits> "owner()"`, never by reading the deploy log.
-- [ ] **Contract audit.** Scope package written 2026-08-16: **`AUDIT-SCOPE-2026-08-16.md`** — send
-      that, not a repo link. Measured scope is **430 nSLOC across 3 contracts, 24 external
-      functions**, frozen at `41fbe9a`, no proxies and no upgradeability. That is small, and the
-      $10–30k estimate should be re-quoted against the real number rather than carried forward.
-      The document states our known issues in full on purpose: rediscovering them is the most
-      expensive way to spend an engagement.
-      **Two things to settle before sending:**
-- [ ] **Decide on the dead fee mechanism** (`setFeeConfig`/`collectFee`). Never active, cannot
-      serve billing (`onlyOwner` where the owner is the user), and it is a **second path by which
-      the quote token leaves a vault** — which is exactly the claim the audit should be able to
-      make without qualification. It also already carries a documented accounting gap. Deleting it
-      drops ~52 source lines, 4 storage slots, 2 events and a 120-line test file. Recommended.
-- [ ] **Freeze `contracts/` for the duration.** An auditor reviewing a commit that is not the one
-      deployed has written a report about nothing. Update the freeze line in the scope doc if the
-      tree moves.
+- **Contract audit — DEFERRED by decision, 2026-08-16.** Not skipped by oversight and not
+  forgotten: the owner reviewed the exposure and chose to carry it for now. Recorded here so the
+  decision stays visible instead of becoming an assumption nobody remembers making.
+
+  The scope package is written and stays current — **`AUDIT-SCOPE-2026-08-16.md`**, measured at
+  **430 nSLOC across 3 contracts, 24 external functions**, frozen at `41fbe9a`, no proxies and no
+  upgradeability. Nothing needs redoing to start an engagement; it is send-ready.
+
+  What the deferral rests on, so the reasoning can be re-checked rather than re-argued: vaults are
+  per-user with no pooled funds, so there is no honeypot that repays an attack; there is no
+  upgradeability, so no one can swap the logic later; and `withdraw` and `pause` are owner-only and
+  always available, so a user has an exit that does not depend on us. `PunoCredits` holds nothing —
+  it forwards in the same call.
+
+  **What changes the calculus** (the trigger to revisit, not a warning to re-read): third-party
+  funds at scale, and the shared-agent-key claim in particular — one key signs for every vault, so
+  if that blast radius is wrong it is wrong for all users at once. A single-question review of that
+  one assumption costs a fraction of a full audit and is the piece worth buying first if only one
+  thing gets bought.
+
+  Also unchanged by the deferral: **no upgradeability means a bug cannot be patched.** The
+  `priceDecimals > 18` hole our own fuzzing found on 2026-08-15 would have bricked a token
+  permanently. That class is real, was found here, and stays the reason to keep fuzzing.
+
+- [ ] **Decide on the dead fee mechanism** (`setFeeConfig`/`collectFee`). No longer blocked on the
+      audit, and the argument for deleting it got _stronger_ without one: it is a **second path by
+      which the quote token leaves a vault**, it has never been active, it cannot serve billing
+      (`onlyOwner` where the owner is the user), and it already carries a documented accounting
+      gap. Unaudited dead code that moves funds is worse than audited dead code that moves funds.
+      Deleting it drops ~52 source lines, 4 storage slots, 2 events and a 120-line test file.
 - [x] **Fuzz tests on `AgentVault` arithmetic. Done 2026-08-15** —
       `test/AgentVault.Arithmetic.t.sol`, 9 properties at 256 runs each, covering feed-decimal
       normalisation, the oracle floor (never above fair value, exact at zero slippage, monotonic
@@ -309,18 +324,31 @@ PowerShell here-strings break on `"` in commit messages. Write the message to a 
 95.6%.
 
 **Mainnet: no**, and the ordering below is the answer to "what is actually left". Updated
-2026-08-15: B1, B2, B4 and B0 are closed, so **nothing on the critical path is development work
-any more.** Every remaining item is a decision, a deployment, or an external party.
+2026-08-16: B0, B1, B2 and B4 are closed and the mainnet worker key exists, so **nothing on the
+critical path is development work any more.** Every remaining item is a decision, a deployment, or
+an external party.
 
-| #   | Item                                                                       | Whose      |
-| --- | -------------------------------------------------------------------------- | ---------- |
-| 1   | A dedicated **mainnet worker key**, its address into `serviceAgent`        | ours, fast |
-| 2   | **Hosting** — see below; nothing is deployed anywhere                      | theirs     |
-| 3   | **PUNO** exists, with a decided USD rate and a treasury conversion routine | theirs     |
-| 4   | `DeployMainnet` run; `vaultFactory`/`punoCredits` written into `config.ts` | both       |
-| 5   | **Audit**, and the multisig calling `acceptOwnership()`                    | theirs     |
+| #     | Item                                                                       | Whose  | State                               |
+| ----- | -------------------------------------------------------------------------- | ------ | ----------------------------------- |
+| ~~1~~ | ~~Dedicated **mainnet worker key**~~ — `0x0aCd6ea5…`, in `serviceAgent`    | ours   | **Done 2026-08-15**                 |
+| 2     | **Hosting** — nothing is deployed anywhere; see below                      | theirs | Not started                         |
+| 3     | **PUNO** exists, with a decided USD rate and a treasury conversion routine | theirs | Not started                         |
+| 4     | `DeployMainnet` run; `vaultFactory`/`punoCredits` written into `config.ts` | both   | Blocked on 3                        |
+| 5     | Multisig created and calling `acceptOwnership()` on `PunoCredits`          | theirs | Not started                         |
+| —     | ~~Audit~~                                                                  | —      | **Deferred by decision 2026-08-16** |
 
 The dependency is strict: 3 gates 4, 4 gates any real user, and 2 gates all of it being public.
+
+**Item 5 survived the audit decision and should not be folded back into it.** These were one row
+until 2026-08-16 and that was a bookkeeping error, not a judgement: an audit is weeks and money,
+while creating a multisig and calling `acceptOwnership()` is an afternoon and costs gas. Whoever
+owns `PunoCredits` can move the treasury and therefore redirect **every payment the product ever
+takes** — that is the one remaining item where the failure is not a bug but a key, and deferring
+the audit does nothing to reduce it.
+
+**Two items now block on funding the mainnet worker rather than on code:** it holds no ETH and pays
+gas on every `executeTrade`, and its key still lives in `.env.mainnet.local` on the dev laptop
+rather than in a host's secret store. Both are listed above under the ownership section.
 
 ### Hosting — not previously recorded anywhere
 

@@ -1,5 +1,11 @@
 # Audit scope — Puno contracts
 
+> **Status: not currently engaged.** The audit was deferred by decision on 2026-08-16 — see
+> `LAUNCH-CHECKLIST.md` for the reasoning and the trigger to revisit. This document is kept
+> send-ready rather than archived, because the work of writing it is already paid for and the
+> decision it supports is meant to be reversible. Re-check the freeze reference below before
+> sending; everything else stands.
+
 **For external reviewers.** This is the package that goes out for quotes and then to whoever is
 engaged. Written 2026-08-16. Keep it current; a scope document that drifts from the tree is worse
 than none, because it is trusted.
