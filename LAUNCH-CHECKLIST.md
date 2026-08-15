@@ -95,22 +95,41 @@ can fill differently.
 2. [ ] **Nothing is visible before connecting a wallet.** A read-only public demo would cost
        nothing; the data already exists.
 3. [ ] **No approval mode** ("require approval before executing").
-4. [ ] **`dry_run` is not user-settable** — honoured by the worker, shown as a badge, but the user
-       cannot choose paper mode.
+4. [x] **`dry_run` is now user-settable. Done 2026-08-15, and this item was worded backwards.**
+       The gap was not that paper mode could not be chosen — paper was the _only_ mode reachable.
+       `POST /api/agents/create` hardcoded `dryRun: true`, `agents/[id]` had a `GET` and nothing
+       else, and no other write path to the column existed, so every agent the wizard ever
+       created was paper permanently and the product could not execute a real trade for any user.
+       (The live trade of 2026-08-14 ran through a seeded agent, not one made in the wizard.) The
+       wizard now offers the choice and reads it back in the mandate, `PATCH /api/agents/[id]`
+       switches an existing agent either way, and `ExecutionMode` sits in the page header beside
+       the kill switch. Confirmation is asked for one direction only: going live. `lib/dryRun.ts`
+       holds the two body-parsing rules — permissive on create where absence safely means paper,
+       strict on patch where there is no safe default — with 7 tests on the junk-input paths.
 5. [ ] **The comparison replay is invisible** — we pay for it and show the user nothing.
 6. [ ] **The oracle floor is unadvertised** — our strongest safety claim appears nowhere.
 
 ### Copy that is currently untrue
 
-- [ ] **`Today · 1,842 ticks routed`** in `apps/site/src/components/sections/CostRouting.tsx` is
-      invented and presented as live, while `ConsoleMock` right next to it _is_ labelled
-      "Illustrative". For a product pitched as "proof, not promises", fix or label it.
+- [x] **`Today · 1,842 ticks routed`. Done 2026-08-15, and it was the smaller of two problems in
+      that component.** The same `COST_TIERS` ladder quoted `~$0.005` for a screen and `~$0.025+`
+      for an escalation — **our model cost**, not the tariff — while `PricingSection`, three
+      sections down the same page, read `PRICES_USD` from `@puno/shared` and rendered `$0.01` and
+      `$0.50`. The landing quoted two prices for the same action, understating a decision by 20×,
+      and printing our cost beside our price publishes the margin. `Rejected · $0` was untrue
+      independently: the risk engine vetoes _after_ the paid decision, so a rejection saves the
+      $0.25 trade fee, not the tick. The rows now carry a `BillableEvent` key and read the amount
+      from `PRICES_USD`, so the two sections cannot drift apart again.
+      **Rule this leaves behind:** never hardcode a price in `apps/site`. Import it.
 
 ### Housekeeping
 
-- [ ] **`pnpm format:check` fails on 31 files** — all pre-existing, none from the UI-density or
-      403 work. Not a regression. Run `pnpm format` once, in its own commit, so the check becomes
-      a usable signal instead of permanent noise.
+- [x] **`pnpm format:check` — clean as of 2026-08-15.** 26 files by then, all pre-existing, fixed
+      in one commit (`131ed92`) so it can be skipped wholesale when reading history. Three of the
+      offenders were **generator output** and are now in `.prettierignore` instead:
+      `apps/agent/drizzle/` (drizzle-kit) and `packages/shared/src/design/generated/`
+      (`generate:css`). Formatting those would have gone green today and red again on the next
+      migration or token change — `tailwind-theme.css` says GENERATED FILE in its own header.
 
 ---
 
@@ -144,7 +163,8 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | ------------------------------------ | -------------------------------------- |
 | `pnpm -r typecheck`                  | 4/4 projects clean                     |
 | `pnpm lint`                          | clean                                  |
-| `pnpm test`                          | **143** — shared 63, agent 74, web 6   |
+| `pnpm format:check`                  | clean — a real signal since 2026-08-15 |
+| `pnpm test`                          | **150** — shared 63, agent 74, web 13  |
 | `forge test -vv` (from `contracts/`) | **88/88**                              |
 | `pnpm -r build`                      | both apps build; `web` emits 20 routes |
 

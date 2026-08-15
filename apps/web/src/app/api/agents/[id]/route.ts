@@ -3,27 +3,52 @@ import { desc, eq } from "drizzle-orm";
 import { schema } from "@puno/shared";
 import { db } from "@/lib/db";
 import { requireAccount } from "@/lib/auth";
+import { dryRunFromPatchBody } from "@/lib/dryRun";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+/// Resolves an agent and proves the caller owns the vault behind it. Both
+/// handlers below need exactly this, and a second copy of an ownership check is
+/// how one of them eventually ends up missing it.
+async function loadOwnedAgent(id: string) {
   const auth = await requireAccount();
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) return { ok: false as const, response: auth.response };
   const owner = auth.address;
 
   const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, id)).limit(1);
-  if (!agent) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!agent) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: "not found" }, { status: 404 }),
+    };
+  }
 
   const [vault] = await db
     .select()
     .from(schema.vaults)
     .where(eq(schema.vaults.id, agent.vaultId))
     .limit(1);
-  if (!vault) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!vault) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: "not found" }, { status: 404 }),
+    };
+  }
 
   // The session proves who is asking; this proves the vault is theirs.
   if (vault.ownerAddress.toLowerCase() !== owner.toLowerCase()) {
-    return NextResponse.json({ error: "not the vault owner" }, { status: 403 });
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: "not the vault owner" }, { status: 403 }),
+    };
   }
+
+  return { ok: true as const, agent, vault };
+}
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const owned = await loadOwnedAgent(id);
+  if (!owned.ok) return owned.response;
+  const { agent, vault } = owned;
 
   const [limits, positions, trades, signalRows] = await Promise.all([
     db
@@ -72,4 +97,47 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     signals,
     navUsd,
   });
+}
+
+/// The only write path to an agent row, and it writes exactly one column.
+///
+/// Before this there was none at all: `dryRun` was set to `true` at creation
+/// and nothing could ever change it, so an owner who wanted their agent to
+/// trade for real had no route to it short of deploying a second vault and
+/// paying for every signature again.
+///
+/// What this grants is narrower than it looks. `runTick` ORs this column with
+/// the worker's process-wide DRY_RUN and the per-run option, and `execute.ts`
+/// checks the process flag last of all — so clearing this permits a live
+/// broadcast, it does not command one. The operator's stop and the vault's own
+/// `pause()` both still win, which is the property that makes this safe to hand
+/// to the user in the first place.
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const owned = await loadOwnedAgent(id);
+  if (!owned.ok) return owned.response;
+  const { agent } = owned;
+
+  // Unreachable today — a trial agent sits on the shared demo vault, so the
+  // ownership check above has already refused it. Kept because the consequence
+  // if that ever stops being true is someone broadcasting real trades from a
+  // vault they do not own, and this costs two lines.
+  if (agent.kind === "trial") {
+    return NextResponse.json({ error: "the trial agent cannot trade live" }, { status: 403 });
+  }
+
+  const body = (await request.json().catch(() => null)) as { dryRun?: unknown } | null;
+  // Strict here, unlike the create route — lib/dryRun.ts explains why the two
+  // read the same field differently.
+  const dryRun = dryRunFromPatchBody(body?.dryRun);
+  if (dryRun === null) {
+    return NextResponse.json({ error: "dryRun must be true or false" }, { status: 400 });
+  }
+
+  await db
+    .update(schema.agents)
+    .set({ dryRun, updatedAt: new Date() })
+    .where(eq(schema.agents.id, id));
+
+  return NextResponse.json({ dryRun });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { fetchJson, retryUnlessDenied } from "./fetchJson";
 
@@ -80,5 +80,33 @@ export function useAgentDetail(agentId: string) {
     queryFn: () => fetchJson<AgentDetail>(`/api/agents/${agentId}`),
     enabled: isConnected && !!address && !!agentId,
     retry: retryUnlessDenied,
+  });
+}
+
+/// Moves an agent between paper and live.
+///
+/// Both caches are invalidated, not just this page's: the dashboard renders the
+/// same fact as a DRY RUN badge per agent, and leaving it showing the old mode
+/// after the switch would make the badge — which is a promise about whether
+/// real money moves — the least trustworthy thing on the screen.
+export function useSetPaperMode(agentId: string) {
+  const queryClient = useQueryClient();
+  const { address } = useAccount();
+
+  return useMutation({
+    mutationFn: async (dryRun: boolean) => {
+      const res = await fetch(`/api/agents/${agentId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body.error ?? `Could not switch mode (${res.status}).`);
+      return dryRun;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["agent", agentId, address] });
+      void queryClient.invalidateQueries({ queryKey: ["agents", address] });
+    },
   });
 }

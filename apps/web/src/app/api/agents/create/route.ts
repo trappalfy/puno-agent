@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { schema } from "@puno/shared";
 import { db } from "@/lib/db";
 import { requireAccount } from "@/lib/auth";
+import { dryRunFromCreateBody } from "@/lib/dryRun";
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
@@ -11,6 +12,8 @@ interface CreateAgentBody {
   network: "mainnet" | "testnet";
   agentName: string;
   agentAddress: string;
+  /// Paper mode. Optional, and absent means `true` — see the insert below.
+  dryRun?: boolean;
   offChainLimits: {
     stopLossBps: number | null;
     takeProfitBps: number | null;
@@ -67,7 +70,11 @@ export async function POST(request: Request) {
       name: agentName.trim(),
       agentAddress,
       status: "armed",
-      dryRun: true,
+      // Was hardcoded `true`, which was not a safe default but a dead end:
+      // no other write path to this column existed, so every agent the wizard
+      // ever created was paper forever and the product could not execute a real
+      // trade for anyone. See lib/dryRun.ts for why absence still means paper.
+      dryRun: dryRunFromCreateBody(body.dryRun),
     })
     .returning();
 

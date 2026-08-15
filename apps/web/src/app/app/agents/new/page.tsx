@@ -271,6 +271,13 @@ function NewAgentWizard() {
   const [tickers, setTickers] = useState<string[]>(ASSETS.equities.map((a) => a.ticker));
   const chosen = ASSETS.equities.filter((a) => tickers.includes(a.ticker));
 
+  // Paper by default, and kept out of FormState because everything in there is
+  // a string the `set` helper feeds from an input's value. Starts true for the
+  // obvious reason, but it is now a starting point rather than a destination:
+  // until this was sent, the create route hardcoded `dryRun: true` and no write
+  // path existed to undo it, so every agent this wizard made was paper forever.
+  const [paper, setPaper] = useState(true);
+
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -405,6 +412,7 @@ function NewAgentWizard() {
           network: network.key,
           agentName: form.agentName,
           agentAddress: agentAccount.address,
+          dryRun: paper,
           offChainLimits: {
             stopLossBps: form.stopLossPct ? pctToBps(form.stopLossPct) : null,
             takeProfitBps: form.takeProfitPct ? pctToBps(form.takeProfitPct) : null,
@@ -734,10 +742,58 @@ function NewAgentWizard() {
               Each one adds a wallet signature — {deploySteps(chosen).length} in total.
             </p>
           </Fieldset>
+
+          {/* Last, because it is the only choice here that is not about *how*
+              the agent trades but whether any of it is real. Everything above
+              is settings; this is the sentence the Mandate ends on. */}
+          <Fieldset
+            title="Execution"
+            note={paper ? "Paper" : "Live"}
+            body="Changeable later from the agent's page. Nothing here is written on-chain — the vault is deployed and armed identically either way, and the limits above apply the same to both."
+          >
+            <div className="flex flex-col gap-[var(--spacing-8)]">
+              {(
+                [
+                  {
+                    value: true,
+                    title: "Paper",
+                    body: "It screens, decides and records exactly as it would live, but no trade is ever broadcast. You still pay for the thinking; there is no execution fee, because nothing executes.",
+                  },
+                  {
+                    value: false,
+                    title: "Live",
+                    body: "Trades it decides on are broadcast and settled with the vault's funds, inside the limits above. The worker's own stop and the vault's pause both still override this.",
+                  },
+                ] as const
+              ).map((mode) => (
+                <label
+                  key={mode.title}
+                  className="flex cursor-pointer items-start gap-[var(--spacing-12)] rounded-[var(--radius-tags)] px-[var(--spacing-8)] py-[var(--spacing-8)] transition-colors hover:bg-row-hover"
+                >
+                  <input
+                    type="radio"
+                    name="execution-mode"
+                    checked={paper === mode.value}
+                    onChange={() => setPaper(mode.value)}
+                    className="mt-[var(--spacing-4)] size-4 shrink-0 accent-lime-phosphor"
+                  />
+                  <span>
+                    <span className="block text-app-body font-semibold text-white">
+                      {mode.title}
+                    </span>
+                    <span className="mt-[var(--spacing-4)] block text-app-body-sm text-white-muted">
+                      {mode.body}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </Fieldset>
         </div>
 
         <Mandate
           form={form}
+          paper={paper}
           onDeploy={handleDeploy}
           canDeploy={canDeploy}
           resuming={vaultAddress !== null}
@@ -759,11 +815,13 @@ function NewAgentWizard() {
  */
 function Mandate({
   form,
+  paper,
   onDeploy,
   canDeploy,
   resuming,
 }: {
   form: FormState;
+  paper: boolean;
   onDeploy: () => void;
   canDeploy: boolean;
   resuming: boolean;
@@ -784,6 +842,24 @@ function Mandate({
         <V value={pct(form.maxPositionPct)} /> of the vault. It waits{" "}
         <V value={secs(form.minSecondsBetweenTrades)} /> between trades, and any fill landing more
         than <V value={pct(form.maxSlippagePct)} /> off the oracle price is reverted.
+      </p>
+
+      {/* The mandate is what someone reads before signing, so the one line that
+          decides whether any of the numbers above move real money belongs in
+          it. Stated as its own sentence rather than folded into the paragraph:
+          it is the sentence most worth not skimming. */}
+      <p className="mt-[var(--spacing-12)] text-app-body text-white-muted">
+        {paper ? (
+          <>
+            It will <span className="text-white">not broadcast trades</span> — every decision is
+            recorded and nothing settles. You can switch it to live later without redeploying.
+          </>
+        ) : (
+          <>
+            It will <span className="text-white">trade for real</span> from its first tick, with the
+            vault&apos;s own funds, inside those limits.
+          </>
+        )}
       </p>
 
       <div className="mt-[var(--spacing-16)] border-t border-moss-border pt-[var(--spacing-16)]">

@@ -16,6 +16,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { ForbiddenError } from "@/lib/hooks/fetchJson";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { KillSwitch } from "@/components/terminal/KillSwitch";
+import { ExecutionMode } from "@/components/terminal/ExecutionMode";
 import { MarketBanner } from "@/components/terminal/MarketBanner";
 import { SessionKeyCard } from "@/components/terminal/SessionKeyCard";
 import { RiskLimitsPanel } from "@/components/terminal/RiskLimitsPanel";
@@ -112,7 +113,12 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
             <AddressChip address={vault.address} explorerBaseUrl={explorerBaseUrl} />
           </div>
         </div>
-        <KillSwitch vaultAddress={vault.address as Address} />
+        {/* Both stay out of the disclosures below: one stops the agent, the
+            other decides whether its trades are real. */}
+        <div className="flex flex-wrap items-start gap-[var(--spacing-16)]">
+          <ExecutionMode agentId={agent.id} dryRun={agent.dryRun} />
+          <KillSwitch vaultAddress={vault.address as Address} />
+        </div>
       </div>
 
       {/* Above the numbers, because "why is nothing happening" outranks every
