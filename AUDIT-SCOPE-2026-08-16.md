@@ -91,9 +91,9 @@ hostile" as a live scenario, not a hypothetical.
 ## 4. Invariants we assert — please attack these
 
 1. **Only the owner can remove value.** `withdraw` is the sole path out of the vault, and it is
-   `onlyOwner`. No qualifier: the second path that used to exist was deleted for this reason
-   (§5.1). `executeTrade` swaps between allowlisted tokens and cannot send to an arbitrary
-   recipient.
+   `onlyOwner`. No qualifier at the contract level: the second path that used to exist was deleted
+   for this reason (§5.1). `executeTrade` swaps between allowlisted tokens and cannot send to an
+   arbitrary recipient. (The asset itself is a separate matter — see §7 on USDG's freeze.)
 2. **`executeTrade` cannot exceed the policy.** Per-trade notional cap, rolling 24h notional cap,
    max position share, minimum seconds between trades, and slippage versus the oracle price. Each
    is checked on chain, and a violating trade reverts regardless of who proposed it.
@@ -206,7 +206,21 @@ Robinhood Chain is an **Arbitrum Orbit** chain. Mainnet 4663, testnet 46630.
   the on-chain `name()`. Periphery contracts must be resolved by `factory()`, never by name —
   Blockscout returns five `SwapRouter`s belonging to four different factories.
 - **The public mainnet RPC sits behind Cloudflare and rejects batched JSON-RPC POSTs.** Enumerate
-  state sequentially, or use the Blockscout REST API, which is not challenged.
+  state sequentially, or use the Blockscout REST API, which is not challenged. `forge script`
+  against that RPC works — verified by simulating `DeployMainnet` on 2026-08-16.
+- **The quote token is an upgradeable proxy with a freeze, and this bounds invariant 4.1.**
+  Verified on chain 2026-08-16: USDG at `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` is an
+  EIP-1967 proxy (implementation `0x68184c449e1a8f34fa18d289737129fd27b66f8f`, verified, UUPS,
+  upgrade authorised by `DEFAULT_ADMIN_ROLE`), issued by Paxos, and it answers
+  `isFrozen(address)`.
+
+  Two consequences we cannot engineer away and do not want an auditor to assume we missed.
+  `VaultFactory` fixes the quote token as **immutable**, so every vault ever created is bound to
+  whatever that proxy's implementation becomes. And a frozen vault address cannot transfer, so
+  "the owner can always withdraw" is true of this contract but not unconditionally true of the
+  user's funds. This is ordinary for a regulated stablecoin and applies to every USDG holder, not
+  only ours — it is listed because the product's strongest safety claim needs to be stated with it
+  rather than without it.
 
 ---
 

@@ -284,6 +284,42 @@ A 403 or 401 must resolve **immediately**, not after a retry storm. Both are ter
       `execute.ts`. The testnet price keeper broadcasting under `DRY_RUN=true` is the one
       deliberate exception — it touches only mock oracles and cannot reach mainnet.
 
+### 4b. Mainnet deploy — what is proven and what is not (2026-08-16)
+
+`DeployMainnet` **simulates cleanly against the live mainnet RPC.** Run from `contracts/` with
+`DEPLOYER_PRIVATE_KEY` in the environment and no `--broadcast`:
+
+| Fact                          | Value                                                             |
+| ----------------------------- | ----------------------------------------------------------------- |
+| Chain id seen                 | 4663                                                              |
+| Gas estimated                 | 3,483,526 at 0.056 gwei                                           |
+| ETH required (forge estimate) | **0.000196** — expect ~0.00008 real; forge padded 2.4× on testnet |
+| `PunoCredits`                 | correctly skipped, `PUNO_TOKEN_ADDRESS` unset                     |
+| Deployer balance on 4663      | **0 ETH — this is the only thing blocking the broadcast**         |
+
+Two things this settled that were open questions:
+
+- **The Cloudflare batching problem does not break `forge script`.** It was a real risk that the
+  padded JSON-RPC batches forge sends would come back as an HTML interstitial. They do not.
+- **USDG hardcoded in the script is correct**: symbol `USDG`, 6 decimals, live at
+  `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`.
+
+- [ ] **Bump the deployer's nonce before deploying, or accept a genuinely confusing address.**
+      The deployer's mainnet nonce is 0, so `VaultFactory` would land at
+      `0x5fecF7bA6365E6763b8984c43307B417A498aD40` — **the same address that is Mock USDG on
+      testnet**, because the same deployer at the same nonce produces the same address on any
+      chain. Both would be real, on their own chains, forever. This defeats the one control this
+      project actually has: the standing rule is to check addresses **visually at the moment of
+      use**, and two identical strings cannot be told apart by eye. One self-transaction (~21,000
+      gas) moves the factory to a fresh address and removes the ambiguity permanently. Cheap
+      insurance in a repo whose security incident was an address substitution.
+- [ ] **USDG is an upgradeable proxy that can freeze addresses.** Verified 2026-08-16: EIP-1967,
+      implementation `0x68184c449e1a8f34fa18d289737129fd27b66f8f`, UUPS, Paxos-issued, and
+      `isFrozen(address)` answers. `VaultFactory` fixes the quote token as **immutable**, so every
+      vault is permanently bound to that proxy. Nothing to fix — but "the owner can always
+      withdraw" is a claim about our contract, not about the asset, and the product copy should
+      not say otherwise.
+
 ### 5. Deploy simulation
 
 - [ ] `DeployTestnet` and `DeployMainnet` both simulate against the live chains.
