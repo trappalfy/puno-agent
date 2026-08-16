@@ -36,6 +36,17 @@ export function Hero() {
         className="mt-8 flex flex-col items-center gap-3"
       >
         <CtaButton href={links.tryAgent} label="Watch it make one decision" />
+        {/* The primary CTA still wants a wallet connection before anything
+            happens. This one wants nothing, and it is the honest answer to the
+            first question a sceptic actually has — not "let me try it" but
+            "show me it has ever worked". Deliberately quiet rather than a
+            second button: it is the fallback, not a competing choice. */}
+        <a
+          href={links.demo}
+          className="text-xs text-white/60 underline decoration-white/20 underline-offset-4 transition-colors hover:text-white hover:decoration-white/50"
+        >
+          Or read what it already decided — no wallet
+        </a>
         <span className="text-xs text-white/40">
           Free, no vault to deploy · Testnet live on Robinhood Chain · 46630
         </span>

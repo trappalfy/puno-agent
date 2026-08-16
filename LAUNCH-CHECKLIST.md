@@ -178,8 +178,24 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
 
 1. [ ] **No public track record.** The largest hole, and the only one that cannot be closed by
        writing code — only by accumulating history. **Start recording now.**
-2. [ ] **Nothing is visible before connecting a wallet.** A read-only public demo would cost
-       nothing; the data already exists.
+2. [x] **Read-only public demo. Done 2026-08-16** — `/demo`, no wallet, no session, no signup.
+       Shows the live demo agent's real signals, the reasoning behind each decision, the trades
+       that reached the chain with a hash you can open in the explorer, and the positions. The
+       headline metric is `signals · escalated`, not a bare count, because the ratio is what shows
+       the cost ladder working — most signals stop at the cheap model.
+       **Deliberately not an `/api` route.** Every route there is `requireAccount`-gated, and a
+       public one would be a second place to get field-level exposure right. It is a server
+       component reading the database directly, every `select` names its columns, and the reason is
+       concrete: `signals.modelCallId` leads to `modelCalls.costUsd`, which is _our_ cost — a
+       `select *` would have published the margin on a public page.
+       Two boundaries worth keeping: only `kind = 'live'` agents are shown, because trial agents
+       sit on the same shared vault but belong to whoever pressed the button, and their reasoning
+       is not ours to publish; and `force-dynamic`, since a prerender would need a database to
+       build and would then serve a snapshot frozen at deploy.
+       Verified by execution: `/demo` returns 200 with **no session cookie**, renders `5 · 2`
+       matching the live agent exactly, contains the real tx hash `0x082d0f73…`, contains none of
+       the three trial agent ids, and greps clean for `costUsd`, `modelCall`, `accountId` and
+       `creditBalance`. All other routes still 200.
 3. [ ] **No approval mode** ("require approval before executing").
 4. [x] **`dry_run` is now user-settable. Done 2026-08-15, and this item was worded backwards.**
        The gap was not that paper mode could not be chosen — paper was the _only_ mode reachable.
@@ -263,7 +279,7 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | `pnpm format:check`                  | clean — a real signal since 2026-08-15 |
 | `pnpm test`                          | **156** — shared 63, agent 80, web 13  |
 | `forge test -vv` (from `contracts/`) | **80/80**                              |
-| `pnpm -r build`                      | both apps build; `web` emits 20 routes |
+| `pnpm -r build`                      | both apps build; `web` emits 21 routes |
 
 If a count is _lower_ than the number above, tests were deleted or skipped — investigate before
 proceeding. If _higher_, update this file.
@@ -274,8 +290,11 @@ With dev running, every route returns 200 — including the agent detail page, w
 twice:
 
 ```
-/app  /app/try  /app/settings  /app/agents/new  /app/agents/[id]  /pricing
+/app  /app/try  /app/settings  /app/agents/new  /app/agents/[id]  /pricing  /demo
 ```
+
+`/demo` must return 200 **with no session cookie at all** — that is the whole point of it. Check it
+with a bare `curl`, not in a browser that already holds a session.
 
 A 403 or 401 must resolve **immediately**, not after a retry storm. Both are terminal in
 `retryUnlessDenied`; if a denial takes ~60s to surface, that predicate broke.
