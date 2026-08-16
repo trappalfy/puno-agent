@@ -89,6 +89,31 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       place, not a home. It belongs in the host's secret store as `AGENT_PRIVATE_KEY` alongside
       `NETWORK=mainnet`; delete the local file once it is there.
 
+### SEC-1 — anyone could register anyone else's vault as their own
+
+**Found and closed 2026-08-16, while planning the mainnet cutover. It was not in this file.**
+
+`POST /api/agents/create` took `vaultAddress` from the request body, wrote `ownerAddress` from
+the session, and never asked the chain whether the two belonged together. The route's own
+comment guarded the mirror-image case — someone else's account named as owner of your vault —
+which is probably why this direction was never noticed.
+
+With nothing but a legitimate sign-in of one's own wallet: POST any vault address, including the
+shared demo vault or a stranger's, and get a `vaults` row naming yourself owner.
+`api/agents/[id]` authorizes on exactly that column, `agents.kind` defaults to `'live'`, and
+`PATCH { dryRun: false }` then tells the worker to broadcast real trades on a vault the caller
+does not own — the signature is available because every wizard-created vault is armed with our
+shared `serviceAgent`. The unique index on `(address, network)` made it a land-grab as well:
+first registrant wins. `withdraw` stays `onlyOwner`, so funds could not leave, but the victim's
+positions, trades and reasoning were readable and their vault traded on command.
+
+One `owner()` read over the **claimed network's** RPC closes both halves: it proves ownership,
+and it proves the network, because the same address on the other chain is either not a contract
+or a different one. The `network` field had no check of any kind before this. RPC failure
+returns 503, never 400 — by then the vault is deployed and the gas is spent.
+
+- [x] Closed. `apps/web/src/lib/createAgent.ts` holds the verdict as a pure function, 12 tests.
+
 ### B5 — the product spans two networks, the app is pinned to one
 
 **Decided 2026-08-16: the free tier stays on testnet, paid agents trade on mainnet.** Both live at
@@ -111,11 +136,56 @@ free run cannot spend real gas — but the web app does not implement it.
   per-agent chain client, and each needs its own `AGENT_PRIVATE_KEY` matching that network's
   `serviceAgent`.
 
+**Web half started 2026-08-16. Done so far:**
+
+- [x] **`packages/shared/src/network/policy.ts`** — the decisions that were spread across files
+      or absent. `whyClosed()` is one predicate for "can someone create *and pay for* an agent
+      here", returning the reason as a string so a gate's copy cannot disagree with its
+      condition. It names PUNO rather than the factory on purpose: `VaultFactory` is to be
+      deployed to mainnet **before** the token exists, and that must not open the wizard. It
+      cannot, because `punoCredits` stays null for a structural reason — `PunoCredits.token` is
+      immutable, so the contract cannot exist before the token.
+- [x] **`creditsNetworkFrom()`** — exactly one network sells credit at a time, mainnet winning
+      as soon as it has both addresses. Not tidiness: testnet PUNO is a mock anyone can be sent
+      for free, and a union would let it buy real USD credit against our real model bill.
+      Returns testnet today, so it is behaviour-preserving now and self-switching at launch.
+- [x] **`publicClientFor(key)`** replaces `serverPublicClient()`; **`currentNetwork()` deleted**
+      rather than generalised, so no future route can reach for a process-wide network in a
+      deployment that serves two. Bare `RPC_URL` is ignored — it belongs to the worker in the
+      shared root `.env`, and honouring it would aim both clients at one node.
+- [x] **`punoDecimals`** on `NetworkConfig`. `18` was hardcoded in five places (indexer, both
+      billing routes, top-up card, balance formatter) and nothing called `decimals()`. A token
+      launched with 9 would have credited every depositor off by orders of magnitude, silently,
+      in the direction of giving service away. `preflight` must assert it on-chain.
+- [x] **`TopUpCard` pinned to the credit network's `chainId`** on every read and write. It sits
+      on `/pricing`, outside `/app/*`, so `NetworkGuard` never covered it — and it is the one
+      path that can lose money rather than confuse: a mainnet wallet approving the testnet token
+      address hits an address with no code, which **succeeds silently** and spends the gas. Its
+      amount was also an inline rewrite of `usdToTokens` that hardcoded 18 and dropped the
+      round-up correction, so it could quote a hair under the minimum and revert on the last wei.
+- [x] **`FREE_TIER_NETWORK`** replaces two independent copies of the same literal in `lib/trial.ts`
+      and `/demo` — a pair that could drift with nothing failing.
+
 **Still open, and it is the web app:**
 
-- [ ] **Five hardcoded `getNetwork("testnet")` pins** — `app/api/auth/verify`, the wizard,
-      `NetworkGuard`, `Sidebar`, `lib/useSession`. Each carries a comment saying it waits on an
-      explicit mainnet decision. That decision is now made, so they have to go.
+- [ ] **Explicit `chainId` on every remaining browser read and write** — `useMarketSession`,
+      `KillSwitch`, `SessionKeyCard`, `RiskLimitsPanel`, the wizard. Verified in wagmi's source:
+      a write with no `chainId` skips `assertCurrentChain` and goes to whatever chain the wallet
+      is on; a read resolves against `config.state.chainId`, so a mainnet vault's address gets
+      read over the testnet RPC. On `useReadContracts` the key goes on **each contract entry** —
+      a top-level one is silently ignored. **This must land before the global guard comes off.**
+- [ ] **Three remaining hardcoded `getNetwork("testnet")` pins** — `app/api/auth/verify`, the
+      wizard, `NetworkGuard`/`Sidebar`. Each carries a comment saying it waits on an explicit
+      mainnet decision. That decision is now made, so they have to go.
+- [ ] **`useChainId()` cannot report a chain we do not run.** wagmi's `syncConnectedChain` drops
+      any chain not in `chains: [...]`, so it returns testnet by default and a wallet on Ethereum
+      mainnet **passes today's `NetworkGuard`**. The replacement must read `useAccount().chainId`.
+- [ ] **The wizard's `DEFAULTS` seed `useState`.** Fill the form on testnet, switch the wallet to
+      mainnet, deploy — and a **testnet Chainlink feed address is written into a mainnet vault**.
+      That is the address-substitution failure this repo's security incident was about, arriving
+      by a different route. Re-seed on network change, and pin the deploy to a captured target
+      chain: `usePublicClient` without an explicit `chainId` would poll the wrong chain after a
+      switch and hang forever rather than fail.
 - [ ] **The SIWE session is signed with `chainId: 46630`.** A user who takes the free run on
       testnet and then creates a paid mainnet vault crosses networks mid-journey, so this is not a
       constant swap — it needs a re-auth path, or a session that is not chain-scoped.
@@ -319,7 +389,7 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | `pnpm -r typecheck`                  | 4/4 projects clean                     |
 | `pnpm lint`                          | clean                                  |
 | `pnpm format:check`                  | clean — a real signal since 2026-08-15 |
-| `pnpm test`                          | **156** — shared 63, agent 80, web 13  |
+| `pnpm test`                          | **182** — shared 72, agent 80, web 30  |
 | `forge test -vv` (from `contracts/`) | **80/80**                              |
 | `pnpm -r build`                      | both apps build; `web` emits 21 routes |
 
@@ -449,6 +519,39 @@ an external party.
 | —     | ~~Audit~~                                                                  | —      | **Deferred by decision 2026-08-16** |
 
 The dependency is strict: 3 gates 4, 4 gates any real user, and 2 gates all of it being public.
+
+### T-0 — the moment the PUNO address arrives
+
+The owner's stated goal: hand over one contract address and have the product go live, rather
+than start rebuilding then. **That is achievable, but "paste the address" is not what happens** —
+`PunoCredits.token` is immutable, so the billing contract cannot exist before the token and T-0
+necessarily contains an on-chain deploy. Target shape: verify the token → one `forge script` →
+**one commit to `config.ts`** → hosts rebuild themselves → `preflight` green.
+
+Four things must be built before that is true, none of which existed on 2026-08-16:
+
+- [ ] **Tell the owner now: PUNO must launch with exactly 18 decimals.** `punoDecimals` records
+      the requirement and `preflight` will check it, but a token already deployed with 9 cannot
+      be fixed by config — it becomes code, at the worst possible moment.
+- [ ] **Split `DeployMainnet`.** It *always* deploys `VaultFactory`, so running it at T-0 after
+      an early factory deploy creates a **second** factory. A separate `DeployPunoCredits.s.sol`
+      makes T-0 a one-purpose command. Add the `treasury != deployer` guard while there —
+      `DeployTestnet:61` has it and `DeployMainnet` does not.
+- [ ] **A write path for the PUNO/USD rate.** Nothing in the repo inserts into
+      `token_price_overrides`; today it is hand-written SQL. And `MAX_OVERRIDE_AGE_MS` is 7 days,
+      so **the rate must be re-entered weekly, forever, or crediting silently stops** — the
+      indexer halts without advancing its cursor and `claim` returns 503. Needs a script plus an
+      expiry warning in the worker's logs, not just the script.
+- [ ] **`preflight`** — one command, one green/red table, reading the chain and the database
+      rather than deploy logs: bytecode at every recorded address, `PunoCredits.token()` == the
+      CA, `decimals()` == 18, `owner()` == the cold wallet *after* `acceptOwnership`, treasury ≠
+      deployer, `VaultFactory.quoteToken()` == USDG, ETH balances for deployer and
+      `serviceAgent`, rate freshness, `reconcile()`, and a machine check that no address equals
+      the old deployer or the attacker's.
+
+Also carried over and still true: `CREDITS_WATCHER_START_BLOCK` in the root `.env` holds a
+**testnet** block, and the indexer's cursor is keyed by `chainId` rather than by contract
+address — so a `PunoCredits` redeploy on the same chain reuses the old cursor.
 
 **Item 5 survived the audit decision and should not be folded back into it.** These were one row
 until 2026-08-16 and that was a bookkeeping error, not a judgement: an audit is weeks and money,
