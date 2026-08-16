@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 import { getNetwork, type NetworkConfig } from "@puno/shared";
+import { parseDryRun } from "./dry-run.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Root .env is shared across the monorepo (see .env.example at repo root) —
@@ -19,15 +20,13 @@ const hexPrivateKey = z
   .regex(/^0x[a-fA-F0-9]{64}$/, "expected a 0x-prefixed 32-byte private key")
   .transform((v) => v as `0x${string}`);
 
-const boolFromString = z
-  .string()
-  .optional()
-  .transform((v) => v === "true" || v === "1");
-
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required — see .env.example"),
   NETWORK: z.enum(["mainnet", "testnet"]).default("testnet"),
-  DRY_RUN: boolFromString,
+  // Kept as the raw string and interpreted by `parseDryRun` below. It used to
+  // go through a `.transform(v => v === "true" || v === "1")`, which collapsed
+  // "unset" and "unrecognised" into `false` — see dry-run.ts.
+  DRY_RUN: z.string().optional(),
   AGENT_PRIVATE_KEY: z.union([hexPrivateKey, z.literal("")]).optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   VAULT_ADDRESS: z.union([hexAddress, z.literal("")]).optional(),
@@ -73,9 +72,17 @@ if (!parsed.success) {
 }
 const env = parsed.data;
 
-// DRY_RUN defaults true unless explicitly disabled — a missing/malformed env
+// DRY_RUN defaults true unless explicitly disabled — a missing or malformed env
 // var must never silently enable live trading (plan 2.5, safeguard #2).
-const dryRun = env.DRY_RUN === undefined ? true : env.DRY_RUN;
+//
+// **This line used to be dead.** `boolFromString` returned a boolean for every
+// input including `undefined`, so `env.DRY_RUN === undefined` was never true
+// and an unset DRY_RUN resolved to `false`: live trading, in the one place the
+// comment promised it could not happen. Proven by execution 2026-08-16, found
+// while writing the deploy runbook — a hosted worker missing the variable would
+// have traded for real. `parseDryRun` now owns the rule and refuses anything it
+// does not recognise.
+const dryRun = parseDryRun(env.DRY_RUN);
 
 if (!dryRun && !env.AGENT_PRIVATE_KEY) {
   throw new Error("AGENT_PRIVATE_KEY is required when DRY_RUN=false");

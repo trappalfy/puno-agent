@@ -35,19 +35,19 @@ them, delete the local copies of anything that reaches production.
 
 Which service needs what — verified by reading the code, not the old `.env.example`:
 
-| Variable                       | web | worker | Notes                                                             |
-| ------------------------------ | :-: | :----: | ----------------------------------------------------------------- |
-| `DATABASE_URL`                 |  ●  |   ●    | The only variable the worker actually requires                    |
-| `SESSION_SECRET`               |  ●  |        | Regenerate; the pre-reinstall value is compromised                |
-| `ENCRYPTION_KEY`               |  ●  |        | Encrypts users' own Anthropic keys at rest                        |
-| `ANTHROPIC_API_KEY`            |     |   ●    | Ours, for users without their own                                 |
-| `AGENT_PRIVATE_KEY`            |     |   ●    | **One per network.** Must derive to that network's `serviceAgent` |
-| `NETWORK`                      |     |   ●    | In `fly.testnet.toml`, not a secret                               |
-| `DRY_RUN`                      |     |   ●    | In `fly.testnet.toml`. Defaults **true** if unset                 |
-| `CREDITS_WATCHER_START_BLOCK`  |     |   ●    | Per network. Unset means "from the head"                          |
-| `RPC_URL_MAINNET` / `_TESTNET` |  ○  |        | Optional; falls back to the public RPC in `config.ts`             |
-| `RPC_URL`                      |     |   ○    | The worker's own, single-network                                  |
-| `VITE_APP_URL`                 |     |        | `apps/site` only — the product app's origin                       |
+| Variable                       | web | worker | Notes                                                                           |
+| ------------------------------ | :-: | :----: | ------------------------------------------------------------------------------- |
+| `DATABASE_URL`                 |  ●  |   ●    | The only variable the worker actually requires                                  |
+| `SESSION_SECRET`               |  ●  |        | Regenerate; the pre-reinstall value is compromised                              |
+| `ENCRYPTION_KEY`               |  ●  |        | Encrypts users' own Anthropic keys at rest                                      |
+| `ANTHROPIC_API_KEY`            |     |   ●    | Ours, for users without their own                                               |
+| `AGENT_PRIVATE_KEY`            |     |   ●    | **One per network.** Must derive to that network's `serviceAgent`               |
+| `NETWORK`                      |     |   ●    | In `fly.testnet.toml`, not a secret                                             |
+| `DRY_RUN`                      |     |   ●    | In `fly.testnet.toml`. Unset or empty = simulate; unrecognised = refuse to boot |
+| `CREDITS_WATCHER_START_BLOCK`  |     |   ●    | Per network. Unset means "from the head"                                        |
+| `RPC_URL_MAINNET` / `_TESTNET` |  ○  |        | Optional; falls back to the public RPC in `config.ts`                           |
+| `RPC_URL`                      |     |   ○    | The worker's own, single-network                                                |
+| `VITE_APP_URL`                 |     |        | `apps/site` only — the product app's origin                                     |
 
 `RPC_URL_MAINNET` is optional but worth setting: the public mainnet RPC sits behind Cloudflare and
 rejects batched JSON-RPC POSTs, returning an HTML interstitial. A paid endpoint removes a class of
@@ -95,14 +95,41 @@ key, and a development machine should not hold the key protecting users' secrets
 They are deliberately two different values — leaking the cookie signer must not implicate the key
 protecting stored API keys.
 
-### Step 3 — the worker on Fly
+### Step 3 — create the tables, and set a rate
+
+The Neon database is empty, and the web app queries it on almost every page. Deploy before this
+and every one of them is a 500.
+
+Migrations normally run as Fly's `release_command`, so skipping Fly means running them by hand,
+once, from this laptop. PowerShell has no inline environment prefix, so set the variable first:
+
+```powershell
+$env:DATABASE_URL = "<the Neon string>"
+pnpm --filter @puno/agent db:migrate
+pnpm --filter @puno/agent set-rate -- 0.0004 --note "testnet launch"
+Remove-Item Env:\DATABASE_URL
+```
+
+In Git Bash the one-line form works instead: `DATABASE_URL="..." pnpm --filter @puno/agent db:migrate`.
+
+The variable set in the shell wins over the root `.env` — dotenv never overwrites something
+already present — so this cannot touch the local database by accident. Clear it afterwards so the
+next command in that terminal does not silently talk to production.
+
+Expect `Migrations applied.` and thirteen tables. The rate has to be set separately because it
+lives in Postgres rather than in config, and without it `/api/pricing` returns `tokenPrice: null`
+and every price falls back to dollars — the landing page would quietly stop quoting PUNO.
+
+The script is `db:migrate`, not `migrate`.
+
+### Step 4 — the worker on Fly
 
 **Fly needs a card.** The permanent free tier ended in 2024; a new account gets a trial of two VM
 hours or seven days, whichever runs out first, and after that every machine is billed. One
 always-on `shared-cpu-1x` at 256 MB is about **$1.94/month**, at 512 MB about **$3.20**. There is
 no monthly plan — it is per-second usage.
 
-If that is not wanted yet, skip to steps 4 and 5: Vercel's free tier needs no card, so the public
+If that is not wanted yet, skip to steps 5 and 6: Vercel's free tier needs no card, so the public
 product can go up without the worker. The cost of deferring is precise — the free-tier demo only
 runs while a laptop is on, and the track record does not accumulate.
 
@@ -159,7 +186,7 @@ with the wrong key screens, decides, bills the user, and only then reverts on ch
 If the process refuses to boot with a service-agent mismatch, the wrong key was pasted. That
 refusal is the safeguard working.
 
-### Step 4 — the product app on Vercel
+### Step 5 — the product app on Vercel
 
 1. Open <https://vercel.com>, sign up with GitHub, and grant access to `trappalfy/puno-agent`.
 2. **Add New → Project**, import that repository.
@@ -181,7 +208,7 @@ refusal is the safeguard working.
 Nothing needs to be set for SIWE: the login message takes its domain from the request URL, so it
 follows whatever hostname the app is served on.
 
-### Step 5 — the landing page on Vercel
+### Step 6 — the landing page on Vercel
 
 1. **Add New → Project**, and import **the same repository again**. Two projects from one repo is
    the intended shape, not a mistake.
@@ -190,14 +217,14 @@ follows whatever hostname the app is served on.
 
    | Name           | Value                                  |
    | -------------- | -------------------------------------- |
-   | `VITE_APP_URL` | the URL from step 4, no trailing slash |
+   | `VITE_APP_URL` | the URL from step 5, no trailing slash |
 
    Vite bakes this at build time, so changing it later needs a redeploy. It is also where the
    landing page fetches `/api/pricing` from — wrong, and prices silently fall back to dollars.
 
 4. **Deploy.**
 
-### Step 6 — check it worked
+### Step 7 — check it worked
 
 | Check                              | Where               | What wrong looks like                               |
 | ---------------------------------- | ------------------- | --------------------------------------------------- |
@@ -207,12 +234,8 @@ follows whatever hostname the app is served on.
 | Worker is signing as the right key | `fly logs`          | any other address                                   |
 | Worker restarts cleanly            | `fly apps restart`  | it does not come back                               |
 
-`tokenPrice: null` on a fresh database is expected — the rate lives in Postgres and the new one is
-empty. Set it once against the production database:
-
-```bash
-DATABASE_URL="<from step 1>" pnpm --filter @puno/agent set-rate -- 0.0004 --note "testnet launch"
-```
+`tokenPrice: null` here means step 3 was skipped or ran against the wrong database — the rate
+lives in Postgres, not in config. Re-run the `set-rate` line from step 3.
 
 ### What is not needed yet
 

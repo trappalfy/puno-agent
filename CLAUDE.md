@@ -251,6 +251,18 @@ owner-only" is the one claim this contract most needs to state without a caveat.
 a known gap: a deposit made after the high-water mark was initialised read as appreciation.
 Do not reintroduce it as a billing mechanism; if a profit fee ever returns it is a new design.
 
+**`DRY_RUN` unset used to mean LIVE trading.** Found and fixed 2026-08-16, proven by execution.
+`boolFromString` was `z.string().optional().transform(v => v === "true" || v === "1")`, which
+returns a boolean for _every_ input including `undefined` — so the guard
+`env.DRY_RUN === undefined ? true : env.DRY_RUN` was dead code and an unset variable resolved to
+`false`. `DRY_RUN=yes` did too. The comment above that line promised a missing or malformed value
+could never enable live trading; it did exactly that. Never harmful in practice only because the
+local `.env` sets it explicitly — a hosted worker missing the variable would have traded for real.
+`apps/agent/src/dry-run.ts` now owns the rule: unset or empty simulates, `true`/`1` simulates,
+`false`/`0` broadcasts, **anything else refuses to boot** rather than being resolved. It is a
+separate pure module because `config.ts` cannot be imported without a `DATABASE_URL`, and this is
+the one setting worth testing exhaustively.
+
 **`tsx` is the worker's runtime, not a build tool** — keep it in `dependencies`. `@puno/shared`
 ships TypeScript source (`main: ./src/index.ts`) and nothing in this repo compiles ahead of
 time, so `node --import tsx` is what actually runs in production. It sat in `devDependencies`
