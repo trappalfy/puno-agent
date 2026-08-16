@@ -4,7 +4,6 @@ pragma solidity ^0.8.28;
 import { Script, console } from "forge-std/Script.sol";
 
 import { VaultFactory } from "../src/VaultFactory.sol";
-import { PunoCredits } from "../src/PunoCredits.sol";
 
 /// @notice Production deploy for Robinhood Chain mainnet (4663).
 ///
@@ -18,16 +17,21 @@ import { PunoCredits } from "../src/PunoCredits.sol";
 /// set by the wizard, using the addresses and per-feed staleness windows in
 /// packages/shared/src/network/config.ts.
 ///
+/// It also no longer deploys `PunoCredits`. That moved to
+/// `DeployPunoCredits.s.sol`, because the two have opposite timing: the factory
+/// has no PUNO dependency and should go out **early**, so that the riskiest step
+/// of launch day is already rehearsed, while `PunoCredits.token` is immutable
+/// and so the billing contract cannot exist until the token does. Leaving both
+/// in one script meant the launch-day run would silently deploy a **second**
+/// VaultFactory at a fresh address, while the first — already in config.ts,
+/// possibly already holding user vaults — stayed where it was.
+///
 /// Usage:
 ///   DEPLOYER_PRIVATE_KEY=0x... forge script script/DeployMainnet.s.sol \
 ///     --rpc-url https://rpc.mainnet.chain.robinhood.com --broadcast
 ///
-/// Optional, once PUNO exists — deploys the billing contract in the same run:
-///   PUNO_TOKEN_ADDRESS=0x... PUNO_TREASURY=0x... PUNO_MIN_DEPOSIT=<wei>
-///
-/// Strongly recommended alongside it — starts handing PunoCredits off the hot
-/// deployer key in the same transaction that creates it:
-///   PUNO_OWNER=0x<multisig>
+/// Run once, ahead of the token launch. Deploying the billing contract later is
+/// `DeployPunoCredits.s.sol`.
 contract DeployMainnet is Script {
     /// @dev Global Dollar on Robinhood Chain mainnet, verified against
     /// https://docs.robinhood.com/chain/connecting and mirrored in
@@ -44,66 +48,30 @@ contract DeployMainnet is Script {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
 
-        // Optional until the token launches. Read before broadcasting so a
-        // missing treasury fails before anything is sent, not halfway through.
-        address punoToken = vm.envOr("PUNO_TOKEN_ADDRESS", address(0));
-        address treasury = vm.envOr("PUNO_TREASURY", address(0));
-        uint256 minDeposit = vm.envOr("PUNO_MIN_DEPOSIT", uint256(0));
-        // Where PunoCredits ownership should end up. Whoever owns it can move
-        // the treasury and therefore redirect every payment, so leaving it on
-        // the key that happens to be in a .env file is the single largest
-        // standing risk in the deployment.
-        address punoOwner = vm.envOr("PUNO_OWNER", address(0));
-        if (punoToken != address(0)) {
-            require(treasury != address(0), "DeployMainnet: PUNO_TREASURY required with token");
-            require(punoOwner != deployer, "DeployMainnet: PUNO_OWNER must not be the deployer");
-        }
+        // Refused rather than ignored. Anyone reaching for the old combined
+        // invocation is expecting this run to deploy billing too, and silently
+        // deploying only half of what they asked for is how a second
+        // VaultFactory ends up on chain — they would run it again with the
+        // right script and get one. Naming the replacement costs one line.
+        require(
+            vm.envOr("PUNO_TOKEN_ADDRESS", address(0)) == address(0),
+            "DeployMainnet: PUNO_TOKEN_ADDRESS is for DeployPunoCredits.s.sol, not this script"
+        );
 
         vm.startBroadcast(deployerKey);
-
         VaultFactory factory = new VaultFactory(USDG);
-
-        address credits = address(0);
-        if (punoToken != address(0)) {
-            PunoCredits c = new PunoCredits(punoToken, treasury, minDeposit);
-            credits = address(c);
-
-            // Two-step by design (Ownable2Step), and the second step is not
-            // ours to take: the deployer stays owner until `punoOwner` calls
-            // acceptOwnership() itself. That is the property worth having — a
-            // typo'd or unreachable address cannot brick the contract, because
-            // nothing has been given away until someone proves they hold it.
-            //
-            // Which also means this is not finished at deploy time. Verify with
-            // `cast call <credits> "owner()"` after the multisig accepts.
-            if (punoOwner != address(0)) {
-                c.transferOwnership(punoOwner);
-            }
-        }
-
         vm.stopBroadcast();
 
         console.log("Chain id            ", block.chainid);
         console.log("Deployer            ", deployer);
         console.log("Quote token (USDG)  ", USDG);
         console.log("VaultFactory        ", address(factory));
-        if (credits == address(0)) {
-            console.log("PunoCredits          (skipped - PUNO_TOKEN_ADDRESS not set)");
-        } else {
-            console.log("PunoCredits         ", credits);
-            console.log("Treasury            ", treasury);
-            if (punoOwner == address(0)) {
-                console.log("");
-                console.log("WARNING: PUNO_OWNER was not set, so PunoCredits is owned by the");
-                console.log("deployer's hot key. Whoever owns it can redirect every payment.");
-                console.log("Run transferOwnership() to a multisig before taking real money.");
-            } else {
-                console.log("Ownership offered to", punoOwner);
-                console.log("NOT YET TRANSFERRED - that address must call acceptOwnership().");
-            }
-        }
         console.log("");
-        console.log("Next: write these into packages/shared/src/network/config.ts");
-        console.log("under NETWORKS.mainnet, and verify the contracts on Blockscout.");
+        console.log("Next: write vaultFactory into NETWORKS.mainnet in");
+        console.log("packages/shared/src/network/config.ts, and verify on Blockscout.");
+        console.log("");
+        console.log("Mainnet stays closed to users until PUNO launches - see whyClosed()");
+        console.log("in packages/shared/src/network/policy.ts. Recording this address does");
+        console.log("not open it, because punoCredits is what the wizard gates on.");
     }
 }
