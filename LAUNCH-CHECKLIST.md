@@ -279,10 +279,16 @@ gone from `app/layout.tsx` and `NetworkGuard.tsx` is deleted).
 
 ### Business decisions that are not config values
 
-- [ ] **The mainnet PUNO/USD rate.** Testnet uses $0.01 as a placeholder for the mock token. The
-      mainnet rate is a real decision — see _Choosing the launch price_ below.
-- [ ] **Total supply and the initial pool.** Sets the price, and therefore every PUNO figure the
-      product displays. Also see below; it is one decision, not two.
+Settled 2026-08-16 and no longer tracked here: **the launch rate and the supply**. The owner is
+handling both; $0.0004 is the working rate the product is built and previewed against, to be
+replaced with the final one when it exists. The reasoning behind the number is kept under
+_Choosing the launch price_ below, because the reasoning is what a later reader will need — the
+decision itself is not ours.
+
+**This is not the same as the rate being handled.** Writing it on mainnet is still a step, and an
+easy one to skip because nothing fails loudly until the first deposit arrives: it is step 3 of
+_The order on the day_ below, and `preflight` checks the rate's age.
+
 - [ ] **Treasury must convert received PUNO to USDG promptly.** Balances are denominated in USD;
       if the treasury holds PUNO, we carry a USD liability backed by a floating asset.
 - [ ] **Regulatory.** Selling a token for access to a service that trades securities is two
@@ -595,9 +601,22 @@ necessarily contains an on-chain deploy. Target shape: verify the token → one 
 
 Four things must be built before that is true, none of which existed on 2026-08-16:
 
-- [ ] **Tell the owner now: PUNO must launch with exactly 18 decimals.** `punoDecimals` records
-      the requirement and `preflight` will check it, but a token already deployed with 9 cannot
-      be fixed by config — it becomes code, at the worst possible moment.
+- [ ] **Read `decimals()` off the token before the first deposit, and put it in `punoDecimals`.**
+      18 is the ask — it is the ERC-20 default, it is what every wallet and explorer assumes, and
+      it is what `config.ts` already says.
+
+      **Correction 2026-08-16:** this item used to say a token deployed with 9 decimals "becomes
+          code, at the worst possible moment". Checked, and that is no longer true — T1 threaded
+          `punoDecimals` through every PUNO conversion (`watcher.ts`, `claim`, `balance`, `pricing`,
+          `set-rate`, the top-up card). A non-18 token is survivable by editing one config field. The
+          remaining hardcoded 18s are the vault's USD convention (`maxNotionalPerTrade`, NAV,
+          `RiskLimitsPanel`) and have nothing to do with PUNO.
+
+          What is still dangerous is a **mismatch** between `punoDecimals` and the chain, in either
+          direction, because nothing else in the system would notice. Off by nine, every deposit is
+          credited a billion times wrong — silently, at the moment real money arrives. `preflight`
+          comparing config against `decimals()` is the whole control.
+
 - [x] **Split `DeployMainnet`. Done 2026-08-16.** It _always_ deployed `VaultFactory`, so a T-0
       run after an early factory deploy would have created a **second** factory at a fresh address
       while the first — already in `config.ts`, possibly already holding user vaults — stayed
@@ -613,6 +632,34 @@ Four things must be built before that is true, none of which existed on 2026-08-
       deployer, `VaultFactory.quoteToken()` == USDG, ETH balances for deployer and
       `serviceAgent`, rate freshness, `reconcile()`, and a machine check that no address equals
       the old deployer or the attacker's.
+
+#### The order on the day
+
+1. The CA arrives. **Read the address back visually** before it goes into any command — the
+   clipboard rule, and this is the one moment it exists for.
+2. Read from chain: `name()`, `symbol()`, `decimals()`, `totalSupply()`.
+3. `pnpm --filter @puno/agent set-rate -- <price> --note "launch"`. Before the deploy, not after:
+   crediting fails closed without it, and the failure is silent until the first deposit.
+4. `DeployPunoCredits.s.sol` with `PUNO_TOKEN_ADDRESS` / `PUNO_TREASURY` / `PUNO_OWNER` /
+   `PUNO_MIN_DEPOSIT`. **Record the deployment's block number** — step 7 needs it.
+5. The cold wallet calls `acceptOwnership()`. Verify with `cast call <credits> "owner()"`, never
+   from the deploy log — the log says what was requested, the call says what is true.
+6. **One commit** to `config.ts`: `punoToken`, `punoCredits`, and `punoDecimals` if step 2 said
+   anything other than 18. `vaultFactory` is already there from the earlier deploy. Push; the
+   hosts rebuild themselves.
+7. `CREDITS_WATCHER_START_BLOCK` = the block from step 4, then start the mainnet worker.
+8. `preflight` — every row green.
+9. Verify both contracts on Blockscout.
+
+Failure modes worth knowing before they happen:
+
+| What went wrong              | How it shows                        | What to do                                                                                                                                                                     |
+| ---------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `decimals()` is not 18       | step 2                              | Survivable — set `punoDecimals` to match. Do **not** proceed on the assumption it is 18                                                                                        |
+| Wrong address deployed       | `preflight` red on `token()`        | Redeploy; the contract is cheap. But the indexer cursor is keyed by **chainId, not contract**, so `CREDITS_WATCHER_START_BLOCK` and `indexer_state` must be reconciled by hand |
+| Cold wallet has not accepted | `preflight` shows deployer as owner | Mainnet can open, but a hot key controls the treasury. This is the one failure that is a decision rather than a bug                                                            |
+| Rate expires                 | `claim` 503, indexer stalls         | Nothing lost — the cursor did not move. Set a rate and the deposits replay                                                                                                     |
+| Need to close mainnet again  | —                                   | `punoCredits: null` in one commit. `whyClosed()` shuts the wizard, the worker stops indexing, credited money stays in the ledger                                               |
 
 ### The rate: how it is written and when it expires
 
