@@ -10,17 +10,26 @@
 #
 # **Deploy from the repository root**, not from this directory:
 #
-#   fly deploy -c apps/agent/fly.testnet.toml
+#   fly deploy . --ha=false -c apps/agent/fly.testnet.toml
 #
 # The build context is the working directory, and the Dockerfile copies the
 # lockfile and `packages/shared` from the root — it cannot build with
-# `apps/agent` as its context. Every path below is therefore root-relative.
+# `apps/agent` as its context.
+#
+# **The two paths below are measured from different places, and that is not a
+# mistake here.** Measured by execution 2026-08-17: `dockerfile` is resolved
+# against the directory holding *this file*, not against the working directory,
+# and not against whatever `fly deploy [WORKING_DIRECTORY]` is given — passing
+# the root explicitly changed nothing. It said `apps/agent/Dockerfile` until
+# then, which flyctl turned into `apps/agent/apps/agent/Dockerfile` and reported
+# as a missing file. `release_command` further down is different again: it runs
+# inside the image, so it is relative to the image's WORKDIR.
 
 app = "puno-worker-testnet"
 primary_region = "iad"
 
 [build]
-dockerfile = "apps/agent/Dockerfile"
+dockerfile = "Dockerfile"
 
 # Runs on its own machine before the new version takes traffic, so a deploy
 # whose migration fails does not half-replace a running worker. Relative to the
@@ -56,7 +65,7 @@ TESTNET_PRICE_KEEPER = "true"
 # deploy-time flag. Every deploy must carry `--ha=false`:
 #
 #   fly apps create puno-worker-testnet          # once, and it touches nothing here
-#   fly deploy --ha=false -c apps/agent/fly.testnet.toml
+#   fly deploy . --ha=false -c apps/agent/fly.testnet.toml
 #
 # For a stateless web service the default is a good one. For this worker it is
 # a correctness bug that bills users twice, which is why it is written here

@@ -283,12 +283,28 @@ else, including this file and `LAUNCH-CHECKLIST.md`. Identifiers, commands, env 
 paths stay English inside it: those are typed, not read.
 
 **Deployment lives in `DEPLOYMENT.md`**; artifacts are `apps/agent/Dockerfile`,
-`apps/agent/fly.testnet.toml` and a `vercel.json` per app. Written but **never built or
-deployed** — do not describe hosting as working. Two traps recorded there: `fly deploy` must run
-from the repository root (the build context is the working directory, and the Dockerfile copies
-the lockfile and `packages/shared` from the root), and the worker must never scale past one
-machine, because `tickAllAgents()` walks every live agent with no lease — a second instance
-double-charges one balance and races two trades out of one vault.
+`apps/agent/fly.testnet.toml` and a `vercel.json` per app. **Both Vercel apps are deployed and
+verified; the worker image builds and has not yet been released.** Traps recorded there, all
+found by execution on 2026-08-16/17:
+
+`fly deploy` must run with the repository root as its working directory — `fly deploy .` from the
+root — because the build context is the working directory and the Dockerfile copies the lockfile
+and `packages/shared` from there. **But `dockerfile` inside `fly.testnet.toml` is resolved
+against the directory holding that file, not the working directory**, so it reads `Dockerfile`
+and not `apps/agent/Dockerfile`; the latter made flyctl look for
+`apps/agent/apps/agent/Dockerfile`. The two paths in one command are measured from different
+places, and the positional `WORKING_DIRECTORY` argument does not change the second one.
+
+**Create the Fly app with `fly apps create`, never `fly launch`.** `launch` treats the config as
+its own output: it rewrote `app` to a generated name and deleted all sixty lines of comments
+while preserving every functional value — a file that still works and no longer says why.
+`--build-only` builds without releasing, which is the way to test a Dockerfile change without
+starting a worker that trades.
+
+The worker must never scale past one machine, because `tickAllAgents()` walks every live agent
+with no lease — a second instance double-charges one balance and races two trades out of one
+vault. There is no machine-count field in `fly.toml`; `--ha=false` on every deploy is the only
+control.
 
 **Prettier does not converge on multi-paragraph markdown list items.** A second paragraph
 indented under a `- [ ]` gets four more spaces on every `--write`, so `format:check` fails
