@@ -751,15 +751,27 @@ the audit does nothing to reduce it.
 gas on every `executeTrade`, and its key still lives in `.env.mainnet.local` on the dev laptop
 rather than in a host's secret store. Both are listed above under the ownership section.
 
-### Hosting — artifacts written 2026-08-16, nothing deployed yet
+### Hosting — the web app is live, the worker is not
 
 `DEPLOYMENT.md` is the runbook. Written and committed: `apps/agent/Dockerfile`, `.dockerignore`,
-`apps/agent/fly.testnet.toml`, and a `vercel.json` for each app. Still absent: CI, a worker health
-endpoint, and any actual deployment.
+`apps/agent/fly.testnet.toml`, and a `vercel.json` for each app. Still absent: CI and a worker
+health endpoint.
 
-**None of it has been built or deployed** — the machine it was written on has no Docker, no `fly`
-and no `vercel` CLI, so the first `fly deploy` is the first real test. Two things were caught by
-reading rather than by running, and both would have failed that first deploy:
+**Deployed 2026-08-16 and verified by fetching it:** Postgres on Neon with all thirteen tables,
+`https://puno-agent-web.vercel.app` serving, and `/api/pricing` returning the rate written by
+`set-rate` — `source: "override"`, $0.000001, with `pricesTokens` at 10K / 500K / 250K PUNO. That
+one response proves the whole chain end to end: Vercel reaches Neon, the rate is stored, and the
+USD-to-PUNO conversion runs server-side as designed.
+
+**The worker is still not deployed, and that is now the whole gap.** It needs a payment method on
+Fly (about $2/month), which is the only reason it was skipped. Everything that makes this a
+product rather than a landing page lives in that process: the trading tick, the deposit indexer,
+the testnet price keeper, and `rateStalenessWarning`. Concretely, the manual rate expires for
+crediting after 24 h and **nothing currently warns** — the timer that would is in the process that
+is not running.
+
+Two things were caught by reading rather than by running, and both would have failed the first
+`fly deploy`:
 
 - `tsx` was in `devDependencies` while `start` is `tsx src/main.ts`. An image built with `--prod`
   builds cleanly and dies on boot with "command not found". Moved to `dependencies`, where it
