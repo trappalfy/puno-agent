@@ -164,7 +164,44 @@ it — a mismatch means lost money, so opening balances must be journaled, not s
 directly.
 
 **`token-price.ts` throws rather than falling back.** A failed credit is replayable from
-chain; a wrong one is not. `MAX_OVERRIDE_AGE_MS = 7 days`.
+chain; a wrong one is not.
+
+**The rate's staleness window is two constants, not one** (split 2026-08-16).
+`MAX_OVERRIDE_AGE_MS = 24h` gates _crediting_; `MAX_DISPLAY_AGE_MS = 7 days` gates _display_.
+It was a single 7-day constant governing both, so narrowing it for a volatile launch would
+have blanked the public pricing page at the same moment billing stopped — and those two
+failures are not comparable. Same shape as the contract's `QUOTE_STALENESS` vs
+`EQUITY_STALENESS`: the strict threshold goes where value moves, not everywhere. Do not
+collapse them.
+
+That creates a state which did not exist before — a rate fresh enough to show and too old to
+charge against — so `TokenPrice` carries `usableForCredit`, and `TopUpCard` refuses to quote
+an amount to send when it is false. That quote is a transaction instruction, not a price
+label: the deposit is valued at whatever rate is current when the indexer reaches it, so
+quoting from a rate we have already declined to bill at is a promise we would not keep.
+
+Expiry is not silent: the worker calls `rateStalenessWarning` hourly and warns from 12h. It
+runs on its own timer rather than inside the deposit poll deliberately — the rate expires
+whether or not anyone is depositing, and the quiet week is the case worth catching. When it
+does expire **nothing is lost**: the indexer refuses to advance its cursor past an event it
+could not value, and every deposit replays once a rate is set.
+
+**Setting the rate is `pnpm --filter @puno/agent set-rate -- <price> --note "<why>"`**, not
+hand-written SQL. The `--note` is required because the table is append-only and is therefore
+the only record of why a rate was what it was. The script **refuses a change of more than 4×**
+without `--force` — a dropped zero is always a factor of ten, and this is the only check
+standing between a keystroke and the number every deposit is valued at, the same position the
+visual address check occupies after the clipboard incident. It also refuses a price below
+`1e-12`, which `numeric(24, 12)` would silently store as zero. It prints what the rate turns
+every price into _before_ writing, computed through the real `usdToTokens`: the rate is
+abstract going in and means something only as prices.
+
+**PUNO's launch price is chosen, not predicted** — we seed the pool, so
+`price = USDG ÷ PUNO in pool` and `FDV = price × supply` are both ours. Pick the price for
+readability and the supply for FDV; comparables inform FDV only. $0.001 makes every number in
+the product round (screen 10 PUNO, decision 500, trade 250, $20 top-up 20,000). The real
+constraint is pool depth, not FDV: we owe dollars and hold PUNO, so revenue is sold into our
+own pool, and depth must be ≳50× daily revenue for that not to move the price against us.
 
 **The deposit indexer advances its cursor only past credited events.**
 `MAX_BLOCK_RANGE = 2000n`, `CONFIRMATIONS = 5n`.
@@ -404,6 +441,7 @@ forge test -vv                                  # contracts (run from contracts/
 pnpm --filter @puno/web dev                     # product app
 pnpm --filter @puno/site dev                    # landing
 pnpm --filter @puno/agent db:migrate            # apply DB migrations
+pnpm --filter @puno/agent set-rate -- 0.001 --note "why"   # PUNO/USD rate
 ```
 
 Note: the script is `db:migrate`, not `migrate` — this file said `migrate` until 2026-08-14

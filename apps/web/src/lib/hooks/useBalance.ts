@@ -26,7 +26,16 @@ export interface BalanceResponse {
   pricesTokens: Record<BillableEventKey, string> | null;
   minDepositUsd: number;
   minDepositTokens: string | null;
-  tokenPrice: { priceUsd: number; source: "twap" | "override"; at: string } | null;
+  /// `usableForCredit` is false when the rate is fresh enough to show but too
+  /// old for the indexer to credit a deposit at. The card must not quote an
+  /// amount to send in that state — the deposit would be valued at whatever
+  /// rate is current when it is finally processed, not at the one on screen.
+  tokenPrice: {
+    priceUsd: number;
+    source: "twap" | "override";
+    at: string;
+    usableForCredit: boolean;
+  } | null;
   /// The billing contracts and, crucially, **the chain they live on**. Exactly
   /// one network sells credit at a time (`creditsNetworkFrom`), and the browser
   /// has to pin its `approve`/`deposit` to `chainId` rather than sending to

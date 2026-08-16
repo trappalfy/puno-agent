@@ -3,14 +3,23 @@
 import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
-import { erc20Abi, punoCreditsAbi, usdToTokens, creditsNetwork } from "@puno/shared";
+import {
+  erc20Abi,
+  punoCreditsAbi,
+  usdToTokens,
+  creditsNetwork,
+  TOP_UP_PRESETS_USD,
+} from "@puno/shared";
 import type { Address } from "viem";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { RequireNetwork } from "../terminal/RequireNetwork";
 import { useBalance, formatTokens } from "@/lib/hooks/useBalance";
 
-const PRESETS_USD = [5, 20, 50];
+// Shared with `set-rate`'s preview, which shows what a proposed PUNO rate turns
+// these into. Previously a local `[5, 20, 50]`; the 5 silently duplicated
+// MIN_DEPOSIT_USD and would have drifted from it.
+const PRESETS_USD = TOP_UP_PRESETS_USD;
 
 /// Top-up is two transactions — approve, then deposit — and the card says so
 /// up front rather than surprising someone with a second wallet prompt halfway
@@ -41,13 +50,23 @@ export function TopUpCard() {
   const rate = balance?.tokenPrice?.priceUsd ?? null;
   const decimals = balance?.contracts.punoDecimals ?? 18;
 
+  // A rate can be fresh enough to *show* and too old to *charge against* — the
+  // display and crediting windows differ deliberately (token-price.ts). This
+  // card is the one place where the difference has to be honoured rather than
+  // rendered: "send 5,000 PUNO for $5" is a transaction instruction, not a
+  // price label, and a deposit is valued at whatever rate is current when the
+  // indexer finally processes it. Quoting an amount off a rate we have already
+  // decided not to bill at would be a promise we cannot keep.
+  const rateTooStaleToCharge = balance?.tokenPrice?.usableForCredit === false;
+
   // The shared helper, not a copy of it. This used to be an inline
   // `BigInt(Math.ceil((usd / rate) * 1e6)) * 10n ** 12n`, which hardcoded 18
   // decimals and dropped the round-up correction `usdToTokens` applies on its
   // last line — so the card could quote a hair under the minimum and the deposit
   // would revert with "below minimum" on the final wei. The comment here claimed
   // it was "derived from the same helper the API uses"; it was not.
-  const amountRaw = rate && rate > 0 ? usdToTokens(selectedUsd, rate, decimals) : null;
+  const amountRaw =
+    rate && rate > 0 && !rateTooStaleToCharge ? usdToTokens(selectedUsd, rate, decimals) : null;
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: punoToken,
@@ -144,6 +163,18 @@ export function TopUpCard() {
             {formatTokens((tokenBalance as bigint).toString(), 2, decimals)} PUNO
           </span>
         </div>
+      )}
+
+      {/* Says what is actually wrong. "Rate unavailable" alone reads as a bug
+          on our side that might clear on refresh; this is a deliberate refusal
+          with a known remedy, and the money is better left in the wallet until
+          it clears. */}
+      {rateTooStaleToCharge && (
+        <p className="mt-[var(--spacing-12)] text-app-body-sm text-white-muted">
+          The PUNO rate is too old to charge against, so we won&rsquo;t quote an amount to send
+          right now — a deposit would be credited at whatever rate is current when it lands, not the
+          one shown here. It usually clears within a few hours.
+        </p>
       )}
 
       {/* The two writes below are the only place in this app where being on the

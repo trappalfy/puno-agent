@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { schema } from "@puno/shared";
+import { schema, latestPriceOverride, rateStalenessWarning } from "@puno/shared";
 import { db } from "./db/client.js";
 import { runTick } from "./loop/tick.js";
 import { runDepositWatcher } from "./billing/watcher.js";
@@ -79,6 +79,25 @@ async function pollPriceKeeper(): Promise<void> {
   }
 }
 
+/// Hourly, and on its own timer rather than folded into the deposit poll.
+///
+/// The deposit poll runs every few seconds, so a warning there would either be
+/// spam or would have to carry its own throttle. More to the point, the two are
+/// unrelated: the rate expires whether or not anyone is depositing, and the
+/// quiet week is exactly the case this is meant to catch.
+const RATE_HEALTH_INTERVAL_MS = 60 * 60 * 1000;
+
+async function pollRateHealth(): Promise<void> {
+  try {
+    const warning = rateStalenessWarning(await latestPriceOverride(db), new Date());
+    if (warning) console.warn(`[rate] ${warning}`);
+  } catch (err) {
+    // Same rule as every other poll: never fatal. Losing the warning is bad;
+    // taking the worker down with it is worse.
+    console.error("[rate] staleness check failed:", err);
+  }
+}
+
 async function main(): Promise<void> {
   console.log(
     `Puno agent worker starting — network=${config.network.key} dryRun=${config.dryRun} tickIntervalMs=${config.tickIntervalMs}`,
@@ -108,6 +127,14 @@ async function main(): Promise<void> {
 
   if (config.network.punoCredits) {
     console.log(`Deposit watcher enabled — PunoCredits at ${config.network.punoCredits}`);
+    // Only where deposits can actually arrive. On a network with no billing
+    // contract there is nothing for a rate to price, and the warning would be
+    // noise an operator learns to ignore — which is how the one that matters
+    // gets missed.
+    await pollRateHealth();
+    setInterval(() => {
+      void pollRateHealth();
+    }, RATE_HEALTH_INTERVAL_MS);
   } else {
     console.log(
       "Deposit watcher idle — no PunoCredits address configured for this network " +

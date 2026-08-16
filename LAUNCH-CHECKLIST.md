@@ -279,11 +279,49 @@ test fixtures naming a network on purpose and one comment recording what used to
 ### Business decisions that are not config values
 
 - [ ] **The mainnet PUNO/USD rate.** Testnet uses $0.01 as a placeholder for the mock token. The
-      mainnet rate is a real decision.
+      mainnet rate is a real decision — see _Choosing the launch price_ below.
+- [ ] **Total supply and the initial pool.** Sets the price, and therefore every PUNO figure the
+      product displays. Also see below; it is one decision, not two.
 - [ ] **Treasury must convert received PUNO to USDG promptly.** Balances are denominated in USD;
       if the treasury holds PUNO, we carry a USD liability backed by a floating asset.
 - [ ] **Regulatory.** Selling a token for access to a service that trades securities is two
       overlapping surfaces, not one. Unresolved; not blocking a testnet demo.
+
+### Choosing the launch price
+
+Worked out 2026-08-16. The framing matters more than the number.
+
+**The price is chosen, not predicted.** We seed the pool ourselves, so
+`price = USDG in pool ÷ PUNO in pool` and `FDV = price × supply` — both ours. Pick the price for
+readability and the supply for the FDV; comparable tokens inform the FDV and never the per-token
+price, because a token at $0.0004 is a $400k project at 1B supply and a $40M one at 100B.
+
+**The comparable set on this chain is not usable directly.** The Noxa launchpad put out 60,000+
+tokens in about eleven days — roughly 75% of all deployments on the network — of which one
+(CASHCAT) reached $226M and the median is zero. An average over that is either ~0 or $226M
+depending on how you take it, and neither is a reference for a payment token backing a dollar
+liability. Noxa itself stopped launching on 11 July and went dark, so the venue is an open
+question too.
+
+**$0.001 is the recommendation**, because every number in the product lands round:
+
+| Rate PUNO  | screen $0.01 | decision $0.50 | trade $0.25 | $20 top-up |
+| ---------- | ------------ | -------------- | ----------- | ---------- |
+| $0.01      | 1            | 50             | 25          | 2,000      |
+| **$0.001** | **10**       | **500**        | **250**     | **20,000** |
+| $0.0004    | 25           | 1,250          | 625         | 50,000     |
+| $0.00001   | 1,000        | 50,000         | 25,000      | 2,000,000  |
+
+Below about $0.00001 the amounts stop being readable; above about $0.01 the cheapest action falls
+under 1 PUNO and the token reads as more expensive than it is. Supply then follows from the FDV:
+at $0.001, 250M/500M/1B supply is a $250k/$500k/$1M FDV.
+
+**The binding constraint is pool depth, not FDV.** We take PUNO and owe dollars, so revenue must
+be sold into our own pool; at depth `L` a sale of `R` moves the price by roughly `R/L`, which puts
+`L ≳ 50 ×` daily revenue — a few thousand dollars at first, which is achievable. But the
+single-sided Uniswap V3 pattern this chain's launchpads use puts **no USDG in the pool at all**
+until someone buys, so on day one there is nothing to sell revenue into. That is exactly the
+liability the treasury-conversion item above names, arriving through a different door.
 
 ### Measurement still owed
 
@@ -549,21 +587,59 @@ Four things must be built before that is true, none of which existed on 2026-08-
 - [ ] **Tell the owner now: PUNO must launch with exactly 18 decimals.** `punoDecimals` records
       the requirement and `preflight` will check it, but a token already deployed with 9 cannot
       be fixed by config — it becomes code, at the worst possible moment.
-- [ ] **Split `DeployMainnet`.** It _always_ deploys `VaultFactory`, so running it at T-0 after
-      an early factory deploy creates a **second** factory. A separate `DeployPunoCredits.s.sol`
-      makes T-0 a one-purpose command. Add the `treasury != deployer` guard while there —
-      `DeployTestnet:61` has it and `DeployMainnet` does not.
-- [ ] **A write path for the PUNO/USD rate.** Nothing in the repo inserts into
-      `token_price_overrides`; today it is hand-written SQL. And `MAX_OVERRIDE_AGE_MS` is 7 days,
-      so **the rate must be re-entered weekly, forever, or crediting silently stops** — the
-      indexer halts without advancing its cursor and `claim` returns 503. Needs a script plus an
-      expiry warning in the worker's logs, not just the script.
+- [x] **Split `DeployMainnet`. Done 2026-08-16.** It _always_ deployed `VaultFactory`, so a T-0
+      run after an early factory deploy would have created a **second** factory at a fresh address
+      while the first — already in `config.ts`, possibly already holding user vaults — stayed
+      where it was. `DeployPunoCredits.s.sol` now deploys billing and nothing else, and
+      `DeployMainnet` **refuses** rather than ignores `PUNO_TOKEN_ADDRESS`. Three guards it
+      lacked: `treasury != deployer`, `PUNO_OWNER` required rather than optional-with-a-warning,
+      and `minDeposit > 0`. `forge test` 80 → 91.
+- [x] **A write path for the PUNO/USD rate. Done 2026-08-16.** See _The rate: how it is written
+      and when it expires_ below.
 - [ ] **`preflight`** — one command, one green/red table, reading the chain and the database
       rather than deploy logs: bytecode at every recorded address, `PunoCredits.token()` == the
       CA, `decimals()` == 18, `owner()` == the cold wallet _after_ `acceptOwnership`, treasury ≠
       deployer, `VaultFactory.quoteToken()` == USDG, ETH balances for deployer and
       `serviceAgent`, rate freshness, `reconcile()`, and a machine check that no address equals
       the old deployer or the attacker's.
+
+### The rate: how it is written and when it expires
+
+Built 2026-08-16. Nothing in the repo used to insert into `token_price_overrides` — it was
+hand-written SQL — and a stale rate stops crediting entirely.
+
+**Writing it:** `pnpm --filter @puno/agent set-rate -- <price> --note "<why>"`. A script rather
+than an `/api` route, for the same reason as the trial-console decision above: the product has no
+admin surface, and one field does not justify creating and defending one. `--note` is required,
+because the table is append-only and is therefore the only record of why a rate was what it was.
+
+Three things beyond the insert, each earned rather than decorative:
+
+- **Preview before write.** Prints what the rate turns every price into, through the real
+  `usdToTokens` rather than a second formula. The rate is abstract going in and means something
+  only as prices — "$0.0001" says nothing about whether a market check should cost 100 PUNO, and
+  that is the judgement actually being made.
+- **Refuses a change over 4×** without `--force`. A dropped or added zero is always a factor of
+  ten. This is the only check between a keystroke and the number every deposit is valued at — the
+  same position the visual address check occupies after the clipboard incident. It fired on its
+  first real invocation, catching a 10× step against the existing testnet rate.
+- **Refuses a price below `1e-12`**, which `numeric(24, 12)` stores as zero; the failure would
+  otherwise surface on the first deposit as "not a usable price", a long way from the typo.
+
+**Expiry is now two windows, not one.** `MAX_OVERRIDE_AGE_MS` was 7 days and governed both
+crediting and display, so narrowing it for a volatile launch would have blanked the public pricing
+page at the same moment billing stopped — and those failures are not comparable. Now
+`MAX_OVERRIDE_AGE_MS = 24h` (crediting) and `MAX_DISPLAY_AGE_MS = 7d` (display), the same shape as
+the contract's `QUOTE_STALENESS` vs `EQUITY_STALENESS`.
+
+That creates a state which did not exist before — a rate fresh enough to show and too old to
+charge against — so `TokenPrice` carries `usableForCredit` and `TopUpCard` stops quoting an amount
+to send when it is false. That quote is a transaction instruction, not a price label.
+
+The worker warns hourly from 12h (`rateStalenessWarning`), on its own timer rather than inside the
+deposit poll: the rate expires whether or not anyone is depositing, and the quiet week is the case
+worth catching. **When it does expire nothing is lost** — the indexer refuses to advance its
+cursor past an event it could not value, and every deposit replays once a rate is set.
 
 Also carried over and still true: `CREDITS_WATCHER_START_BLOCK` in the root `.env` holds a
 **testnet** block, and the indexer's cursor is keyed by `chainId` rather than by contract

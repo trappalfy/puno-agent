@@ -47,6 +47,15 @@ export const STARTER_GRANT_USD = PRICES_USD.screen + PRICES_USD.decision;
 /// Below this a top-up costs more in gas and indexing than it delivers.
 export const MIN_DEPOSIT_USD = 5.0;
 
+/// The amounts the top-up card offers. Shared rather than local to that card
+/// because `set-rate` previews what a proposed rate turns them into, and a
+/// preview of amounts the user is never offered would be answering a different
+/// question than the one being decided.
+/// `readonly number[]` rather than `as const`: the literal types `as const`
+/// produces narrow `useState(PRESETS[0])` to `useState<5>`, so selecting any
+/// other preset stops typechecking. These are amounts, not a closed set of tags.
+export const TOP_UP_PRESETS_USD: readonly number[] = [MIN_DEPOSIT_USD, 20, 50];
+
 /// Balance at or below this triggers the "top up soon" state in the UI. Not a
 /// hard stop: the real gate is `balance >= price` at call time.
 export const LOW_BALANCE_WARNING_USD = 1.0;

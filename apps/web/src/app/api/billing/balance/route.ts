@@ -32,8 +32,11 @@ export async function GET() {
   const network = creditsNetwork();
   const decimals = network?.punoDecimals ?? TOKEN_DECIMALS;
 
-  // Read-only path: a missing rate renders as "unavailable" rather than a 500.
-  // Crediting a deposit still refuses outright — see getPunoUsdPrice.
+  // Read-only path: a missing rate renders as "unavailable" rather than a 500,
+  // and a rate too old to bill against still comes back — with
+  // `usableForCredit: false`, which is passed through below so the top-up card
+  // can stop short of quoting an amount to send. Crediting a deposit refuses
+  // outright at the shorter window; see getPunoUsdPrice.
   const tokenPrice = await tryGetPunoUsdPrice(db);
 
   const balanceUsd = Number(account.creditBalanceUsd);
@@ -70,7 +73,12 @@ export async function GET() {
       ? usdToTokens(MIN_DEPOSIT_USD, tokenPrice.priceUsd, decimals).toString()
       : null,
     tokenPrice: tokenPrice
-      ? { priceUsd: tokenPrice.priceUsd, source: tokenPrice.source, at: tokenPrice.at }
+      ? {
+          priceUsd: tokenPrice.priceUsd,
+          source: tokenPrice.source,
+          at: tokenPrice.at,
+          usableForCredit: tokenPrice.usableForCredit,
+        }
       : null,
     contracts: {
       punoToken: network?.punoToken ?? null,
