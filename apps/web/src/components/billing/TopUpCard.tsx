@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
-import { erc20Abi, punoCreditsAbi, usdToTokens } from "@puno/shared";
+import { erc20Abi, punoCreditsAbi, usdToTokens, creditsNetwork } from "@puno/shared";
 import type { Address } from "viem";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
+import { RequireNetwork } from "../terminal/RequireNetwork";
 import { useBalance, formatTokens } from "@/lib/hooks/useBalance";
 
 const PRESETS_USD = [5, 20, 50];
@@ -32,6 +33,11 @@ export function TopUpCard() {
   // some other contract entirely.
   const chainId = balance?.contracts.chainId ?? undefined;
   const configured = !!punoToken && !!punoCredits && chainId !== undefined;
+  // Same selection the API made, resolved locally because `RequireNetwork`
+  // names a network rather than a chain id. Falls back to the free tier's
+  // network only to satisfy the type when nothing sells credit — in that case
+  // the card has already returned the "PUNO hasn't launched" branch above.
+  const creditsNetworkKey = creditsNetwork()?.key ?? "testnet";
   const rate = balance?.tokenPrice?.priceUsd ?? null;
   const decimals = balance?.contracts.punoDecimals ?? 18;
 
@@ -140,73 +146,88 @@ export function TopUpCard() {
         </div>
       )}
 
-      <Button
-        variant="primary"
-        className="mt-[var(--spacing-16)] w-full"
-        disabled={busy || amountRaw === null || insufficientTokens}
-        onClick={() => {
-          if (amountRaw === null) return;
-          setStatus(null);
+      {/* The two writes below are the only place in this app where being on the
+          wrong chain costs money rather than causing confusion, and this card
+          was never behind the old global guard — it renders on /pricing, outside
+          /app/*. `approve` sent to the other network lands on an address with no
+          code, which succeeds silently and spends the gas; at a colliding
+          address (same deployer, same nonce, different chain) the selector hits
+          some other contract entirely.
 
-          if (needsApproval) {
-            writeContract(
-              {
-                address: punoToken,
-                abi: erc20Abi,
-                functionName: "approve",
-                args: [punoCredits, amountRaw],
-                chainId,
-              },
-              {
-                onSuccess: () => {
-                  setStatus("Approved. Confirm the payment to finish.");
-                  void refetchAllowance();
-                  reset();
+          Inline and around the action only: the reads above are pinned to
+          `chainId` and are correct whatever the wallet is on, so there is no
+          reason to blank the prices and the balance too. */}
+      <div className="mt-[var(--spacing-16)]">
+        <RequireNetwork network={creditsNetworkKey} variant="inline">
+          <Button
+            variant="primary"
+            className="w-full"
+            disabled={busy || amountRaw === null || insufficientTokens}
+            onClick={() => {
+              if (amountRaw === null) return;
+              setStatus(null);
+
+              if (needsApproval) {
+                writeContract(
+                  {
+                    address: punoToken,
+                    abi: erc20Abi,
+                    functionName: "approve",
+                    args: [punoCredits, amountRaw],
+                    chainId,
+                  },
+                  {
+                    onSuccess: () => {
+                      setStatus("Approved. Confirm the payment to finish.");
+                      void refetchAllowance();
+                      reset();
+                    },
+                    onError: (err) => setStatus(err.message),
+                  },
+                );
+                return;
+              }
+
+              writeContract(
+                {
+                  address: punoCredits,
+                  abi: punoCreditsAbi,
+                  functionName: "deposit",
+                  args: [amountRaw],
+                  chainId,
                 },
-                onError: (err) => setStatus(err.message),
-              },
-            );
-            return;
-          }
-
-          writeContract(
-            {
-              address: punoCredits,
-              abi: punoCreditsAbi,
-              functionName: "deposit",
-              args: [amountRaw],
-              chainId,
-            },
-            {
-              onSuccess: async (hash) => {
-                setStatus("Payment sent — crediting…");
-                // The watcher would pick this up within a few seconds anyway;
-                // claiming directly just makes the balance appear now instead
-                // of on the next poll. Crediting is idempotent, so both paths
-                // running is harmless.
-                const res = await fetch("/api/billing/claim", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ txHash: hash }),
-                });
-                const json = await res.json();
-                setStatus(res.ok ? "Credit added." : (json.error ?? "Couldn't credit yet."));
-                void queryClient.invalidateQueries({ queryKey: ["balance", address] });
-                void refetchAllowance();
-              },
-              onError: (err) => setStatus(err.message),
-            },
-          );
-        }}
-      >
-        {busy
-          ? "Confirming…"
-          : insufficientTokens
-            ? "Not enough PUNO"
-            : needsApproval
-              ? `Approve ${selectedUsd} USD of PUNO`
-              : `Pay $${selectedUsd}`}
-      </Button>
+                {
+                  onSuccess: async (hash) => {
+                    setStatus("Payment sent — crediting…");
+                    // The watcher would pick this up within a few seconds anyway;
+                    // claiming directly just makes the balance appear now instead
+                    // of on the next poll. Crediting is idempotent, so both paths
+                    // running is harmless.
+                    const res = await fetch("/api/billing/claim", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ txHash: hash }),
+                    });
+                    const json = await res.json();
+                    setStatus(res.ok ? "Credit added." : (json.error ?? "Couldn't credit yet."));
+                    void queryClient.invalidateQueries({ queryKey: ["balance", address] });
+                    void refetchAllowance();
+                  },
+                  onError: (err) => setStatus(err.message),
+                },
+              );
+            }}
+          >
+            {busy
+              ? "Confirming…"
+              : insufficientTokens
+                ? "Not enough PUNO"
+                : needsApproval
+                  ? `Approve ${selectedUsd} USD of PUNO`
+                  : `Pay $${selectedUsd}`}
+          </Button>
+        </RequireNetwork>
+      </div>
 
       {status && (
         <p className="mt-[var(--spacing-12)] text-app-body-sm text-white-muted">{status}</p>

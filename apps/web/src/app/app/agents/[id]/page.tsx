@@ -122,7 +122,17 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
             other decides whether its trades are real. */}
         <div className="flex flex-wrap items-start gap-[var(--spacing-16)]">
           <ExecutionMode agentId={agent.id} dryRun={agent.dryRun} />
-          <KillSwitch vaultAddress={vault.address as Address} chainId={vaultNetwork.chainId} />
+          {/* The page itself is deliberately not gated: every read on it is
+              pinned to the vault's chain and is correct whatever the wallet is
+              doing, and blocking the whole view would mean someone holding a
+              testnet trial agent and a mainnet vault could never see one of the
+              two. The two controls that *write* carry the requirement
+              themselves, inside their own owner checks. */}
+          <KillSwitch
+            vaultAddress={vault.address as Address}
+            chainId={vaultNetwork.chainId}
+            network={vault.network}
+          />
         </div>
       </div>
 
@@ -188,6 +198,7 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           agentAddress={agent.agentAddress as Address}
           explorerBaseUrl={explorerBaseUrl}
           chainId={vaultNetwork.chainId}
+          network={vault.network}
         />
       </div>
     </div>

@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { agentVaultAbi } from "@puno/shared";
+import { agentVaultAbi, type NetworkKey } from "@puno/shared";
 import type { Address } from "viem";
 import { Disclosure } from "../ui/Disclosure";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { AddressChip } from "../ui/AddressChip";
+import { RequireNetwork } from "./RequireNetwork";
 
 function formatCountdown(expirySec: bigint): string {
   const nowSec = BigInt(Math.floor(Date.now() / 1000));
@@ -31,11 +32,13 @@ export function SessionKeyCard({
   agentAddress,
   explorerBaseUrl,
   chainId,
+  network,
 }: {
   vaultAddress: Address;
   agentAddress: Address;
   explorerBaseUrl: string;
   chainId: number;
+  network: NetworkKey;
 }) {
   const { address } = useAccount();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -91,9 +94,14 @@ export function SessionKeyCard({
 
       {isOwner && !revoked && (
         <div className="mt-[var(--spacing-16)]">
-          <Button variant="danger" onClick={() => setConfirmOpen(true)}>
-            Revoke key
-          </Button>
+          {/* The expiry and the addresses above stay readable on any chain —
+              they are pinned reads. Only revoking needs the wallet to be on the
+              vault's network, because only revoking is a transaction. */}
+          <RequireNetwork network={network} variant="inline">
+            <Button variant="danger" onClick={() => setConfirmOpen(true)}>
+              Revoke key
+            </Button>
+          </RequireNetwork>
         </div>
       )}
 

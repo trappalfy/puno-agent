@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { getNetwork } from "@puno/shared";
+import { useAccount } from "wagmi";
 import { ConnectWalletButton } from "../ConnectWalletButton";
-import { NetworkBadge } from "../ui/NetworkBadge";
 import { ButtonLink } from "../ui/ButtonLink";
 import { BalanceMeter } from "./BalanceMeter";
-
-const network = getNetwork("testnet"); // testnet-only until a separate mainnet decision
+import { describeChain } from "@/lib/networkGuard";
 
 /**
  * Each item owns a subtree, not just its own href. A bare prefix test would
@@ -44,6 +42,7 @@ const NAV = [
  */
 export function Sidebar() {
   const pathname = usePathname();
+  const { isConnected, chainId } = useAccount();
 
   return (
     <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-moss-border/40 bg-vault-floor p-[var(--layout-card-padding)]">
@@ -53,12 +52,21 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* Every address, limit and balance in this app belongs to one chain, and
-          the rail is the only element on screen for all of them — so the badge
-          belongs here rather than repeated per page. */}
-      <div className="mt-[var(--spacing-12)]">
-        <NetworkBadge network={network.key} />
-      </div>
+      {/* This used to be a NetworkBadge for one pinned network, on the reasoning
+          that "every address, limit and balance in this app belongs to one
+          chain". That stopped being true: the free tier runs on testnet
+          permanently while paid agents trade on mainnet, so one account holds
+          both and each agent carries its own badge.
+
+          What is still worth saying once, in the rail, is where the *wallet* is
+          — because that is the thing a person changes and then forgets. Named
+          honestly for chains we do not run, rather than silently rounded to one
+          of ours. */}
+      {isConnected && (
+        <div className="mt-[var(--spacing-12)] text-num-sm text-white-faint font-jetbrains-mono">
+          Wallet on {describeChain(chainId)}
+        </div>
+      )}
 
       <nav className="mt-[var(--layout-section-gap)] flex flex-col gap-[var(--spacing-4)]">
         {NAV.map(({ href, label, isActive }) => {

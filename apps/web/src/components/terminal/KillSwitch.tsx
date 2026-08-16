@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { agentVaultAbi } from "@puno/shared";
+import { agentVaultAbi, type NetworkKey } from "@puno/shared";
 import type { Address } from "viem";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { RequireNetwork } from "./RequireNetwork";
 
 /// DESIGN.md #21 — the one place red is a large element. Reads `paused()`
 /// live (never trusts a cached DB value for this) and calls the vault's own
@@ -27,7 +28,15 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 /// at the same nonce lands on the same address on every chain, so the read can
 /// return a *different* contract's owner and silently hide the stop control from
 /// the person who owns the vault. Same reasoning as the worker's network guard.
-export function KillSwitch({ vaultAddress, chainId }: { vaultAddress: Address; chainId: number }) {
+export function KillSwitch({
+  vaultAddress,
+  chainId,
+  network,
+}: {
+  vaultAddress: Address;
+  chainId: number;
+  network: NetworkKey;
+}) {
   const { address } = useAccount();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -65,9 +74,15 @@ export function KillSwitch({ vaultAddress, chainId }: { vaultAddress: Address; c
           Paused on-chain
         </span>
       )}
-      <Button variant={isPaused ? "primary" : "danger"} onClick={() => setConfirmOpen(true)}>
-        {isPaused ? "Resume trading" : "Pause trading"}
-      </Button>
+      {/* Inside the owner check above, not around this whole component: the
+          owner test reads `owner()` over the vault's own chain and is correct
+          regardless of the wallet, so gating earlier would show a switch prompt
+          to people who are not being offered the control at all. */}
+      <RequireNetwork network={network} variant="inline">
+        <Button variant={isPaused ? "primary" : "danger"} onClick={() => setConfirmOpen(true)}>
+          {isPaused ? "Resume trading" : "Pause trading"}
+        </Button>
+      </RequireNetwork>
 
       <ConfirmDialog
         open={confirmOpen}
