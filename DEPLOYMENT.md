@@ -135,12 +135,22 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ```powershell
 $env:DATABASE_URL = "<строка из Neon>"
-pnpm --filter @puno/agent db:migrate
-pnpm --filter @puno/agent set-rate -- 0.000001 --note "testnet launch"
+pnpm.cmd --filter @puno/agent db:migrate
+pnpm.cmd --filter @puno/agent set-rate -- 0.000001 --note "testnet launch"
 Remove-Item Env:\DATABASE_URL
 ```
 
-В Git Bash работает однострочная форма: `DATABASE_URL="..." pnpm --filter @puno/agent db:migrate`.
+**`pnpm.cmd`, а не `pnpm` — не опечатка.** На свежей Windows политика выполнения сценариев по
+умолчанию `Restricted`, и обёртка `pnpm.ps1` из глобального npm-каталога не запускается:
+_«Невозможно загрузить файл … pnpm.ps1, так как выполнение сценариев отключено»_,
+`PSSecurityException`. Батник `pnpm.cmd` лежит рядом и политикой не проверяется вообще, поэтому
+работает без изменения настроек машины. Если удобнее один раз включить сценарии —
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` (права администратора не нужны), но помните,
+что политика выполнения не является средством защиты: её обходит любой `-ExecutionPolicy Bypass`,
+и Microsoft описывает её как защиту от случайного запуска, а не от злоумышленника.
+
+В Git Bash проблемы нет вовсе, и там работает однострочная форма:
+`DATABASE_URL="..." pnpm --filter @puno/agent db:migrate`.
 
 Переменная, заданная в оболочке, перебивает корневой `.env` — dotenv никогда не перезаписывает уже
 существующее, — поэтому случайно попасть в локальную базу нельзя. Последняя строка убирает её,
