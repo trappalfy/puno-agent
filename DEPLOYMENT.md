@@ -58,6 +58,150 @@ file does not exist on either platform, and dotenv treats a missing path as a no
 overwriting anything already set — so the platform's own variables win and neither line needs a
 special case for production.
 
+## The owner's walkthrough
+
+Every click and every command, in order. Roughly 40 minutes. Nothing here is reversible in a way
+that matters — a wrong value is a re-paste, not a redeploy from scratch.
+
+Two secrets have to be **generated**, two have to be **copied from the local `.env`**, and one
+comes from Anthropic. That distinction matters, so it is called out at each step.
+
+### Step 1 — Postgres on Neon
+
+1. Open <https://neon.tech> and sign up with GitHub.
+2. **Create project.** Name `puno`. Pick the region closest to you; leave the Postgres version at
+   the default.
+3. On the project page find **Connection string**. Switch the toggle to **Pooled connection** —
+   serverless functions open many short-lived connections, and the direct string will exhaust the
+   limit.
+4. Copy it. It looks like `postgresql://user:password@host/db?sslmode=require`.
+
+**This string contains a password. Do not paste it into a chat, an issue, or a file in this
+repository.** It goes only into Fly's and Vercel's secret stores, in the steps below.
+
+### Step 2 — generate the two web secrets
+
+Run twice in a terminal, and keep the two outputs apart:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+The first is `SESSION_SECRET` (signs login cookies), the second is `ENCRYPTION_KEY` (AES-256-GCM
+over users' own Anthropic keys, 32-byte hex). Generate **fresh** ones rather than reusing the
+local values: the production database starts empty, so no existing ciphertext depends on the old
+key, and a development machine should not hold the key protecting users' secrets.
+
+They are deliberately two different values — leaking the cookie signer must not implicate the key
+protecting stored API keys.
+
+### Step 3 — the worker on Fly
+
+Install `flyctl` (PowerShell, once):
+
+```powershell
+iwr https://fly.io/install.ps1 -useb | iex
+```
+
+Then, **from the repository root** — the build context is the working directory:
+
+```bash
+fly auth signup      # or: fly auth login
+fly launch --no-deploy -c apps/agent/fly.testnet.toml
+```
+
+`fly launch` asks a few questions. Say **no** to a Postgres database and **no** to Redis — Neon is
+the database. Keep the app name `puno-worker-testnet` and accept the settings already in the file.
+
+Now the secrets. `AGENT_PRIVATE_KEY` is the one that cannot be regenerated: every testnet vault is
+armed with a specific address, so the worker must hold that exact key. Take it from the
+`AGENT_PRIVATE_KEY` line of the local root `.env` — verified 2026-08-16 to derive to
+`0x389AA9c066854a1e1A62a9F49910760a8D010adD`, which is `NETWORKS.testnet.serviceAgent`.
+
+```bash
+fly secrets set -a puno-worker-testnet \
+  DATABASE_URL="<from step 1>" \
+  ANTHROPIC_API_KEY="<console.anthropic.com → API keys>" \
+  AGENT_PRIVATE_KEY="<AGENT_PRIVATE_KEY from the local .env>"
+```
+
+Leave `CREDITS_WATCHER_START_BLOCK` unset. Unset means "start from the current head", which is
+right for a database that begins empty; setting it to the old testnet block would replay months of
+historical deposits into fresh accounts.
+
+```bash
+fly deploy -c apps/agent/fly.testnet.toml
+fly logs -a puno-worker-testnet
+```
+
+The log must contain `Signing as 0x389AA9c066854a1e1A62a9F49910760a8D010adD`. **Read that address
+character by character** — it is the clipboard rule, and a mismatch here is expensive: a worker
+with the wrong key screens, decides, bills the user, and only then reverts on chain.
+
+If the process refuses to boot with a service-agent mismatch, the wrong key was pasted. That
+refusal is the safeguard working.
+
+### Step 4 — the product app on Vercel
+
+1. Open <https://vercel.com>, sign up with GitHub, and grant access to `trappalfy/puno-agent`.
+2. **Add New → Project**, import that repository.
+3. **Root Directory**: click Edit, choose `apps/web`. In the same dialog turn **on** _Include
+   files outside the root directory_. Without it the build cannot see `@puno/shared` or the
+   lockfile, both of which live above `apps/web`.
+4. Leave Framework, Build and Install commands alone — `apps/web/vercel.json` sets them.
+5. **Environment Variables**, three of them, all for Production and Preview:
+
+   | Name             | Value                |
+   | ---------------- | -------------------- |
+   | `DATABASE_URL`   | the string from Neon |
+   | `SESSION_SECRET` | first value, step 2  |
+   | `ENCRYPTION_KEY` | second value, step 2 |
+
+6. **Deploy**, then copy the resulting URL — something like `https://puno-web.vercel.app`. Step 5
+   needs it.
+
+Nothing needs to be set for SIWE: the login message takes its domain from the request URL, so it
+follows whatever hostname the app is served on.
+
+### Step 5 — the landing page on Vercel
+
+1. **Add New → Project**, and import **the same repository again**. Two projects from one repo is
+   the intended shape, not a mistake.
+2. **Root Directory**: `apps/site`. _Include files outside the root directory_ **on**, same reason.
+3. One environment variable:
+
+   | Name           | Value                                  |
+   | -------------- | -------------------------------------- |
+   | `VITE_APP_URL` | the URL from step 4, no trailing slash |
+
+   Vite bakes this at build time, so changing it later needs a redeploy. It is also where the
+   landing page fetches `/api/pricing` from — wrong, and prices silently fall back to dollars.
+
+4. **Deploy.**
+
+### Step 6 — check it worked
+
+| Check                              | Where               | What wrong looks like                               |
+| ---------------------------------- | ------------------- | --------------------------------------------------- |
+| Prices show **PUNO**, not dollars  | the landing page    | dollars → `VITE_APP_URL` wrong, or the web app down |
+| `/demo` opens with no wallet       | `<web>/demo`        | a login prompt                                      |
+| Rate is being served               | `<web>/api/pricing` | `tokenPrice: null` → no rate in this database       |
+| Worker is signing as the right key | `fly logs`          | any other address                                   |
+| Worker restarts cleanly            | `fly apps restart`  | it does not come back                               |
+
+`tokenPrice: null` on a fresh database is expected — the rate lives in Postgres and the new one is
+empty. Set it once against the production database:
+
+```bash
+DATABASE_URL="<from step 1>" pnpm --filter @puno/agent set-rate -- 0.0004 --note "testnet launch"
+```
+
+### What is not needed yet
+
+Do **not** create the mainnet worker, and do not put mainnet keys anywhere. `NETWORKS.mainnet` has
+no `punoCredits`, so mainnet stays closed by construction — see `whyClosed()`. The second Fly app
+belongs to T-0.
+
 ## Order
 
 Databases before the things that read them, and the worker before the web app so the first
