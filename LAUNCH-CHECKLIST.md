@@ -763,12 +763,22 @@ health endpoint.
 one response proves the whole chain end to end: Vercel reaches Neon, the rate is stored, and the
 USD-to-PUNO conversion runs server-side as designed.
 
-**The worker is still not deployed, and that is now the whole gap.** It needs a payment method on
-Fly (about $2/month), which is the only reason it was skipped. Everything that makes this a
-product rather than a landing page lives in that process: the trading tick, the deposit indexer,
-the testnet price keeper, and `rateStalenessWarning`. Concretely, the manual rate expires for
-crediting after 24 h and **nothing currently warns** — the timer that would is in the process that
-is not running.
+**The worker is live too, as of 2026-08-16 22:39 UTC.** `puno-worker-testnet` in `iad`, one
+machine, `DRY_RUN=false`. Its startup log is the verification and each line answers a question
+that mattered: it signs as `0x389AA9c0…0adD`, which is `NETWORKS.testnet.serviceAgent` and
+therefore the address every testnet vault is armed with; the deposit watcher attached to
+`PunoCredits` at `0xD0D4B4…D74f6`; the price keeper is running, so mock oracles stay fresh and
+the demo agent has a mark it will trade against; and there is no `[rate]` warning, so the rate is
+current. `fly machines list` shows exactly one machine — `--ha=false` held, which is the one
+setting here whose failure spends a user's balance twice.
+
+The release command behaved as designed and that is worth recording, because it only shows itself
+on a deploy: migrations ran on their own machine, printed `Migrations applied.`, exited 0, and
+were not restarted. A migration that failed would have left the running worker in place rather
+than half-replacing it.
+
+**This closes the rate-expiry gap by itself** — `rateStalenessWarning` runs inside this process
+and warns from 12 h, so the rate can no longer expire unannounced.
 
 Two things were caught by reading rather than by running, and both would have failed the first
 `fly deploy`:

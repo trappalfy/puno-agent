@@ -283,9 +283,10 @@ else, including this file and `LAUNCH-CHECKLIST.md`. Identifiers, commands, env 
 paths stay English inside it: those are typed, not read.
 
 **Deployment lives in `DEPLOYMENT.md`**; artifacts are `apps/agent/Dockerfile`,
-`apps/agent/fly.testnet.toml` and a `vercel.json` per app. **Both Vercel apps are deployed and
-verified; the worker image builds and has not yet been released.** Traps recorded there, all
-found by execution on 2026-08-16/17:
+`apps/agent/fly.testnet.toml` and a `vercel.json` per app. **All three are deployed and verified
+by execution on 2026-08-16/17** — `puno-agent-web.vercel.app`, `puno-agent-site.vercel.app`, and
+the testnet worker on Fly signing as `serviceAgent` from a single machine. Traps recorded there,
+all found the same way:
 
 `fly deploy` must run with the repository root as its working directory — `fly deploy .` from the
 root — because the build context is the working directory and the Dockerfile copies the lockfile
