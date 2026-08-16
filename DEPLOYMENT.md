@@ -97,6 +97,15 @@ protecting stored API keys.
 
 ### Step 3 — the worker on Fly
 
+**Fly needs a card.** The permanent free tier ended in 2024; a new account gets a trial of two VM
+hours or seven days, whichever runs out first, and after that every machine is billed. One
+always-on `shared-cpu-1x` at 256 MB is about **$1.94/month**, at 512 MB about **$3.20**. There is
+no monthly plan — it is per-second usage.
+
+If that is not wanted yet, skip to steps 4 and 5: Vercel's free tier needs no card, so the public
+product can go up without the worker. The cost of deferring is precise — the free-tier demo only
+runs while a laptop is on, and the track record does not accumulate.
+
 Install `flyctl` (PowerShell, once):
 
 ```powershell
@@ -107,11 +116,20 @@ Then, **from the repository root** — the build context is the working director
 
 ```bash
 fly auth signup      # or: fly auth login
-fly launch --no-deploy -c apps/agent/fly.testnet.toml
+fly launch --no-deploy --ha=false -c apps/agent/fly.testnet.toml
 ```
+
+`--ha=false` is not optional. Fly provisions **two** machines by default, and two workers tick the
+same agents concurrently: two screening charges against one balance, two racing trades out of one
+vault. There is no machine-count field in `fly.toml`, so the flag has to be on every `launch` and
+every `deploy`.
 
 `fly launch` asks a few questions. Say **no** to a Postgres database and **no** to Redis — Neon is
 the database. Keep the app name `puno-worker-testnet` and accept the settings already in the file.
+
+If `fly launch` fails with _"requested machine count exceeds organization limit"_, that is the
+billing gate rather than the machine count: an organization with no payment method on file has a
+limit of zero. `--ha=false` is still required, but it will not clear that error on its own.
 
 Now the secrets. `AGENT_PRIVATE_KEY` is the one that cannot be regenerated: every testnet vault is
 armed with a specific address, so the worker must hold that exact key. Take it from the
@@ -130,7 +148,7 @@ right for a database that begins empty; setting it to the old testnet block woul
 historical deposits into fresh accounts.
 
 ```bash
-fly deploy -c apps/agent/fly.testnet.toml
+fly deploy --ha=false -c apps/agent/fly.testnet.toml
 fly logs -a puno-worker-testnet
 ```
 
@@ -227,7 +245,7 @@ To run one by hand: `pnpm --filter @puno/agent db:migrate`. The script is `db:mi
 ```bash
 fly launch --no-deploy -c apps/agent/fly.testnet.toml
 fly secrets set DATABASE_URL=... ANTHROPIC_API_KEY=... AGENT_PRIVATE_KEY=... -a puno-worker-testnet
-fly deploy -c apps/agent/fly.testnet.toml
+fly deploy --ha=false -c apps/agent/fly.testnet.toml
 ```
 
 Check the boot log for three lines that each catch a different mistake:
