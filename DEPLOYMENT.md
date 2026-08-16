@@ -33,7 +33,7 @@ Docker и Fly не проверял никто: первый `fly deploy` и б�
 ## Правило про секреты, прежде чем таблица
 
 **Никогда не вставляйте секрет в чат, в issue или в коммит — включая `DATABASE_URL`, в котором
-лежит пароль.** Они вводятся прямо в хранилище площадки: `fly secrets set` и переменные окружения
+лежит пароль.** Они вводятся прямо в хранилище площадки: `fly secrets import` и переменные окружения
 Vercel. Оба шифруют их у себя, и ни один не проходит через этот репозиторий.
 
 Сейчас корневой `.env` держит весь набор открытым текстом на одном ноутбуке. После того как
@@ -189,10 +189,16 @@ iwr https://fly.io/install.ps1 -useb | iex
 
 Дальше — **из корня репозитория**, потому что контекст сборки это рабочий каталог:
 
-```bash
+```powershell
+cd C:\Users\chaiz\Desktop\puno-agent-main
 fly auth signup      # или: fly auth login
 fly launch --no-deploy --ha=false -c apps/agent/fly.testnet.toml
 ```
+
+`cd` в блоке не для красоты. Без него `flyctl` не найдёт конфиг и скажет
+_«config file not found at specified path»_, попутно попробовав путь как каталог, — сообщение
+про `-c`, а причина в каталоге. И даже угадав конфиг, сборка из `apps/agent` собрала бы образ без
+корневого лок-файла и без `packages/shared`, потому что `Dockerfile` копирует их из корня.
 
 `--ha=false` не опция, а обязательство. Fly по умолчанию поднимает **две** машины, а два воркера
 тикают одних и тех же агентов одновременно: два списания за скрининг с одного баланса и две гонки
@@ -211,11 +217,30 @@ fly launch --no-deploy --ha=false -c apps/agent/fly.testnet.toml
 Берётся из строки `AGENT_PRIVATE_KEY` локального корневого `.env` — проверено 2026-08-16, что он
 выводится в `0x389AA9c066854a1e1A62a9F49910760a8D010adD`, то есть в `NETWORKS.testnet.serviceAgent`.
 
-```bash
-fly secrets set -a puno-worker-testnet \
-  DATABASE_URL="<из шага 1>" \
-  ANTHROPIC_API_KEY="<console.anthropic.com → API keys>" \
-  AGENT_PRIVATE_KEY="<AGENT_PRIVATE_KEY из локального .env>"
+**Не `fly secrets set`, а `import` со стандартного ввода.** Причина не в удобстве: PowerShell
+записывает каждую введённую команду в `ConsoleHost_history.txt`, поэтому секрет, переданный
+аргументом, остаётся в открытом виде в файле, который переживёт сессию. Введённое в stdin туда не
+попадает. Проверено 2026-08-16 — файл на этой машине уже содержал строку подключения Postgres
+после шага 3.
+
+```powershell
+fly secrets import -a puno-worker-testnet
+```
+
+Команда ждёт ввода. Вставьте три строки, затем **Ctrl+Z и Enter** (это конец ввода в Windows):
+
+```
+DATABASE_URL=<из шага 1>
+ANTHROPIC_API_KEY=<console.anthropic.com → API keys>
+AGENT_PRIVATE_KEY=<AGENT_PRIVATE_KEY из локального .env>
+```
+
+Кавычки не нужны и вредны: в формате `NAME=VALUE` они станут частью значения.
+
+Заодно почистите то, что уже записалось на шаге 3:
+
+```powershell
+Remove-Item "$env:APPDATA\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt"
 ```
 
 `CREDITS_WATCHER_START_BLOCK` **не задавайте**. Пусто означает «с текущей головы цепи», что верно
