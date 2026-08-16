@@ -251,6 +251,20 @@ owner-only" is the one claim this contract most needs to state without a caveat.
 a known gap: a deposit made after the high-water mark was initialised read as appreciation.
 Do not reintroduce it as a billing mechanism; if a profit fee ever returns it is a new design.
 
+**`tsx` is the worker's runtime, not a build tool** — keep it in `dependencies`. `@puno/shared`
+ships TypeScript source (`main: ./src/index.ts`) and nothing in this repo compiles ahead of
+time, so `node --import tsx` is what actually runs in production. It sat in `devDependencies`
+until 2026-08-16, which meant a `pnpm install --prod` image would build cleanly and die on boot
+with "command not found" — a packaging bug that surfaces only once deployed.
+
+**Deployment lives in `DEPLOYMENT.md`**; artifacts are `apps/agent/Dockerfile`,
+`apps/agent/fly.testnet.toml` and a `vercel.json` per app. Written but **never built or
+deployed** — do not describe hosting as working. Two traps recorded there: `fly deploy` must run
+from the repository root (the build context is the working directory, and the Dockerfile copies
+the lockfile and `packages/shared` from the root), and the worker must never scale past one
+machine, because `tickAllAgents()` walks every live agent with no lease — a second instance
+double-charges one balance and races two trades out of one vault.
+
 **Prettier does not converge on multi-paragraph markdown list items.** A second paragraph
 indented under a `- [ ]` gets four more spaces on every `--write`, so `format:check` fails
 again immediately after `format` "fixed" it. Hit twice on `LAUNCH-CHECKLIST.md`. Keep list

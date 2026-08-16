@@ -723,11 +723,25 @@ the audit does nothing to reduce it.
 gas on every `executeTrade`, and its key still lives in `.env.mainnet.local` on the dev laptop
 rather than in a host's secret store. Both are listed above under the ownership section.
 
-### Hosting — not previously recorded anywhere
+### Hosting — artifacts written 2026-08-16, nothing deployed yet
 
-Checked 2026-08-15: there is no `Dockerfile`, no `vercel.json`, no CI, no deploy config of any
-kind. `docker-compose.yml` starts **Postgres only**. The web app, the database and the worker all
-run on this laptop.
+`DEPLOYMENT.md` is the runbook. Written and committed: `apps/agent/Dockerfile`, `.dockerignore`,
+`apps/agent/fly.testnet.toml`, and a `vercel.json` for each app. Still absent: CI, a worker health
+endpoint, and any actual deployment.
+
+**None of it has been built or deployed** — the machine it was written on has no Docker, no `fly`
+and no `vercel` CLI, so the first `fly deploy` is the first real test. Two things were caught by
+reading rather than by running, and both would have failed that first deploy:
+
+- `tsx` was in `devDependencies` while `start` is `tsx src/main.ts`. An image built with `--prod`
+  builds cleanly and dies on boot with "command not found". Moved to `dependencies`, where it
+  belongs — `@puno/shared` ships TypeScript source, so tsx is this app's runtime, not a build tool.
+- Fly's build context is the working directory, so `dockerfile = "Dockerfile"` inside
+  `apps/agent/` would not have resolved. The path is root-relative and the deploy runs from the
+  repository root.
+
+Checked 2026-08-15 and still true otherwise: `docker-compose.yml` starts **Postgres only**, and
+the web app, the database and the worker all run on this laptop.
 
 That makes "public launch" blocked on infrastructure that does not exist, and it is worth doing
 before the rest rather than after, for one reason: the largest product gap is the absence of a

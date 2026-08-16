@@ -1,0 +1,63 @@
+# The testnet worker.
+#
+# **Named for its network on purpose.** The product runs one worker process per
+# chain — the free tier lives on testnet permanently while paid agents trade on
+# mainnet — and the two differ in exactly the settings that decide whether real
+# money moves. A single `fly.toml` with the network swapped in place is one
+# careless edit away from pointing a live-trading config at mainnet, so a
+# mainnet worker means writing `fly.mainnet.toml` deliberately. DEPLOYMENT.md
+# lists what has to differ in it.
+#
+# **Deploy from the repository root**, not from this directory:
+#
+#   fly deploy -c apps/agent/fly.testnet.toml
+#
+# The build context is the working directory, and the Dockerfile copies the
+# lockfile and `packages/shared` from the root — it cannot build with
+# `apps/agent` as its context. Every path below is therefore root-relative.
+
+app = "puno-worker-testnet"
+primary_region = "iad"
+
+[build]
+dockerfile = "apps/agent/Dockerfile"
+
+# Runs on its own machine before the new version takes traffic, so a deploy
+# whose migration fails does not half-replace a running worker. Relative to the
+# image's WORKDIR (/app/apps/agent), not to this file. `db:migrate` needs only
+# DATABASE_URL — every other variable in the worker's schema is optional or
+# defaulted (apps/agent/src/config.ts).
+[deploy]
+release_command = "node --import tsx src/db/migrate.ts"
+
+[env]
+NETWORK = "testnet"
+
+# Explicit, and only safe because this file is testnet-only. The demo agent
+# does place real testnet trades, so the free tier needs this false — but
+# DRY_RUN defaults to **true** in config.ts precisely so a missing or malformed
+# value can never silently enable live trading. Writing it here is a statement
+# about this chain, not a default for another one to inherit.
+DRY_RUN = "false"
+
+# Mock oracles go stale an hour after anyone last set them, which made the demo
+# agent refuse to trade and explain itself — correctly, and as a first
+# impression. Testnet-only by construction: `isTestnet` is false on mainnet and
+# `demoVault` is null there.
+TESTNET_PRICE_KEEPER = "true"
+
+# One machine, never two. `tickAllAgents()` walks every live agent with no
+# lease or lock, so a second instance ticks the same agents concurrently:
+# double screening charges against one balance, and two racing trades out of
+# one vault. Do not scale this past 1 without adding a lease first.
+[[vm]]
+size = "shared-cpu-1x"
+memory = "512mb"
+
+# No [processes] block: the image's CMD already starts the worker as PID 1, and
+# restating it here would be a second place to keep it right.
+#
+# No [http_service] either. The worker serves nothing; it polls. Fly restarts
+# the machine when the process exits, which is the only liveness signal that
+# exists today — a wedged-but-running worker would go unnoticed. Worth a health
+# endpoint before this carries paying users; see DEPLOYMENT.md.
