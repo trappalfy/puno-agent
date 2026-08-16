@@ -174,6 +174,27 @@ export async function runTick(agentId: string, opts: TickOptions = {}): Promise<
   }
   const { agent, vault: vaultRow, limits } = agentCtx;
 
+  // This worker speaks to exactly one chain: `chain/client.ts` builds its
+  // clients once from `config.network`, and its key is the service agent for
+  // that network alone. Ticking an agent whose vault lives on the other chain
+  // would read that vault's address over the wrong RPC.
+  //
+  // Which is worse than an error, because it does not have to fail. The same
+  // deployer at the same nonce produces the same address on every chain — the
+  // mainnet VaultFactory would land exactly where testnet's mock USDG already
+  // sits — so a vault address can exist on both networks and be a completely
+  // different contract on each. A read like that returns data, not a revert.
+  //
+  // Guarded here rather than only in the caller because runTick has two: the
+  // interval loop in main.ts and the free-tier queue in trial/runner.ts. One
+  // check where the vault is loaded covers both, and any caller added later.
+  if (vaultRow.network !== config.network.key) {
+    console.warn(
+      `[tick] skipping ${agent.name}: vault is on ${vaultRow.network}, this worker runs ${config.network.key}`,
+    );
+    return;
+  }
+
   // `agents.dry_run` is the per-agent switch. It was written by the creation
   // wizard and rendered as a "Dry run" badge in the console from the start, but
   // nothing read it — only the process-wide DRY_RUN decided whether a trade was

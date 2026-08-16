@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { runTick } from "../loop/tick.js";
 import { refreshDemoFeeds } from "../testnet/price-keeper.js";
+import { config } from "../config.js";
 
 export interface TrialPassResult {
   ran: number;
@@ -63,6 +64,17 @@ async function finish(runId: string, error: string | null): Promise<void> {
 /// model calls that did happen, and silently running again would charge them
 /// twice for one press of a button. The row records why, and the UI says so.
 export async function runTrialQueue(): Promise<TrialPassResult> {
+  // A worker on a network with no demo vault has no free tier to serve, and
+  // must not touch this queue at all.
+  //
+  // Not a tidiness check. Trial agents live on the testnet demo vault, and
+  // `runTick` now refuses any vault on another network — so a mainnet worker
+  // reaching this point would claim a queued run, have the tick skip it, and
+  // then mark it `done`. The user's one free run, consumed with nothing to
+  // show for it and no error to explain why. Claiming has to be what we
+  // prevent, because once a row is claimed every outcome is wrong.
+  if (!config.network.demoVault) return { ran: 0, failed: 0 };
+
   let ran = 0;
   let failed = 0;
 

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { schema } from "@puno/shared";
 import { db } from "./db/client.js";
 import { runTick } from "./loop/tick.js";
@@ -13,10 +13,20 @@ async function tickAllAgents(): Promise<void> {
   // `kind = 'live'` only. Free-tier agents run once, on request, from the
   // trial queue — ticking them here would bill someone for a decision they
   // never asked for, on a timer, until their grant was gone.
+  //
+  // And only vaults on *this* worker's network. The product is deliberately
+  // split across two: the free tier runs on testnet so a free decision cannot
+  // spend real gas, while paid agents trade on mainnet. One database holds
+  // both, so without this join a mainnet worker would walk straight into
+  // testnet vaults and vice versa. `runTick` refuses them anyway (see the
+  // guard there for why a wrong-network read can silently succeed), but doing
+  // it in SQL means the loop does not fetch and discard every agent belonging
+  // to the other network on every pass.
   const agents = await db
     .select({ id: schema.agents.id, name: schema.agents.name })
     .from(schema.agents)
-    .where(eq(schema.agents.kind, "live"));
+    .innerJoin(schema.vaults, eq(schema.vaults.id, schema.agents.vaultId))
+    .where(and(eq(schema.agents.kind, "live"), eq(schema.vaults.network, config.network.key)));
   for (const agent of agents) {
     try {
       await runTick(agent.id);

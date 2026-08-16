@@ -89,6 +89,41 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       place, not a home. It belongs in the host's secret store as `AGENT_PRIVATE_KEY` alongside
       `NETWORK=mainnet`; delete the local file once it is there.
 
+### B5 — the product spans two networks, the app is pinned to one
+
+**Decided 2026-08-16: the free tier stays on testnet, paid agents trade on mainnet.** Both live at
+once, permanently. That is the shape the code already implies — mainnet's `demoVault` is null so a
+free run cannot spend real gas — but the web app does not implement it.
+
+**Half done. The worker half is closed (2026-08-16):**
+
+- `tickAllAgents()` selected every live agent with no network filter, and `runTick` read the vault
+  row while ignoring its `network` column, against a chain client built once from process-wide
+  `config.network`. With both networks in one database a worker would read the other network's
+  vault addresses over its own RPC — and that need not fail: the same deployer at the same nonce
+  yields the same address on every chain, so an address can exist on both and be a **different
+  contract** on each. Now filtered in SQL and guarded again inside `runTick`, which covers the
+  trial runner as a second caller.
+- `runTrialQueue` now returns early when the network has no `demoVault`. Without it the guard above
+  made things worse rather than better: a mainnet worker would **claim** a queued free run, skip
+  the tick, and mark it `done` — the user's one free run consumed silently, with no error.
+- **Operational consequence: one worker process per network.** They cannot be merged without a
+  per-agent chain client, and each needs its own `AGENT_PRIVATE_KEY` matching that network's
+  `serviceAgent`.
+
+**Still open, and it is the web app:**
+
+- [ ] **Five hardcoded `getNetwork("testnet")` pins** — `app/api/auth/verify`, the wizard,
+      `NetworkGuard`, `Sidebar`, `lib/useSession`. Each carries a comment saying it waits on an
+      explicit mainnet decision. That decision is now made, so they have to go.
+- [ ] **The SIWE session is signed with `chainId: 46630`.** A user who takes the free run on
+      testnet and then creates a paid mainnet vault crosses networks mid-journey, so this is not a
+      constant swap — it needs a re-auth path, or a session that is not chain-scoped.
+- [ ] **`NetworkGuard` blocks the whole console on any chain but the pinned one.** It has to become
+      per-vault: the same account will legitimately hold a testnet trial agent and a mainnet vault.
+- [ ] **Mainnet is nine signatures, not six** — five equities rather than two. Nothing to fix; the
+      ledger is already generated from the selection. Worth knowing before quoting the flow.
+
 ### Security and ownership — must happen before mainnet money
 
 - [ ] **Transfer `PunoCredits` ownership off the hot `.env` key.** Whoever owns it can move the
@@ -197,6 +232,13 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
        the three trial agent ids, and greps clean for `costUsd`, `modelCall`, `accountId` and
        `creditBalance`. All other routes still 200.
 3. [ ] **No approval mode** ("require approval before executing").
+       3a. [ ] **The wizard does not check the credit balance.** `canDeploy` looks only at form validity,
+       so someone at $0 can spend real gas on six signatures (nine on mainnet) and end up with a
+       vault that cannot make a single decision. Credits are **per account**, not per agent
+       (`checkBalanceBeforeCall(agent.accountId, …)`), and the starter grant is once per account
+       ever — so creating a second agent while out of credit produces another agent that also
+       cannot run. Warn rather than block, probably: someone may reasonably want the vault set up
+       before funding it. Product decision, not a bug.
 4. [x] **`dry_run` is now user-settable. Done 2026-08-15, and this item was worded backwards.**
        The gap was not that paper mode could not be chosen — paper was the _only_ mode reachable.
        `POST /api/agents/create` hardcoded `dryRun: true`, `agents/[id]` had a `GET` and nothing

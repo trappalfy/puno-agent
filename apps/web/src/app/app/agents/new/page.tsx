@@ -55,6 +55,16 @@ const DEFAULT_FEED_STALENESS_HOURS = "26";
 const MAX_FEED_STALENESS_HOURS = 48;
 
 /**
+ * Everything this network can trade, pinned and verified — see assets.ts.
+ *
+ * Declared up here rather than beside the other network constants further down
+ * because `DEFAULTS` now reads the quote feed out of it, and a `const` used
+ * before its declaration is a temporal-dead-zone error rather than a hoisted
+ * one.
+ */
+const ASSETS = getAssets(network.key);
+
+/**
  * The form takes percentages because that is how the same limits are read
  * back everywhere else (RiskLimitsPanel renders every bps value as a
  * percentage). Basis points are the contract's unit, not the user's, so the
@@ -113,7 +123,18 @@ const PRESET_NAMES = Object.keys(PRESETS) as PresetName[];
 
 const DEFAULTS: FormState = {
   agentName: "",
-  quoteFeedAddress: "",
+  // Prefilled from the pinned registry, which carries this network's verified
+  // quote feed alongside its `description()` — the same source the equity feeds
+  // below come from.
+  //
+  // It used to start empty, which made a Chainlink feed address the one thing a
+  // user had to type by hand, and left the only required field in the form
+  // unanswerable by anyone who had not read assets.ts. It was also the worst
+  // possible field to ask someone to paste: this project's security incident
+  // was a clipboard hijacker substituting addresses on copy, and a substituted
+  // feed here is an oracle the vault then trusts. Still editable — the registry
+  // is a default, not a lock.
+  quoteFeedAddress: ASSETS.quote.feed,
   quoteFeedStalenessHours: DEFAULT_FEED_STALENESS_HOURS,
   ...PRESETS.Balanced,
 };
@@ -190,9 +211,6 @@ function validate(f: FormState): Errors {
 const PREVIEW_ENABLED = process.env.NODE_ENV === "development";
 const PREVIEW_VAULT = "0x1111111111111111111111111111111111111111" as Address;
 const PREVIEW_AGENT = "0x2222222222222222222222222222222222222222" as Address;
-
-/** Everything this network can trade, pinned and verified — see assets.ts. */
-const ASSETS = getAssets(network.key);
 
 /**
  * The router the vault will allowlist.
@@ -544,7 +562,13 @@ function NewAgentWizard() {
       {errorMsg && (
         <div className="mt-[var(--spacing-24)] rounded-[var(--radius-body-blocks)] border border-signal-red bg-signal-red/10 p-[var(--spacing-16)]">
           <p className="text-app-body-sm font-semibold text-signal-red">
-            {failedAt === 0 ? "Nothing was deployed" : `Stopped after step ${failedAt} of 4`}
+            {/* `of 4` was hardcoded here from when the sequence was fixed at
+                four signatures. B2 made it one per allowlisted equity, so a
+                default testnet run is six and mainnet is nine — the message was
+                telling someone who stopped at step 5 that there were 4. */}
+            {failedAt === 0
+              ? "Nothing was deployed"
+              : `Stopped after step ${failedAt} of ${deploySteps(chosen).length}`}
           </p>
           <p className="mt-[var(--spacing-4)] text-app-body-sm text-white-muted">{errorMsg}</p>
           {vaultAddress && (
@@ -708,7 +732,7 @@ function NewAgentWizard() {
           <Fieldset
             title="Price feed"
             note="Required"
-            body="The vault values its own book through this Chainlink feed. There is no default address for this network yet."
+            body={`The vault values its own book through this Chainlink feed. Prefilled with ${network.name}'s verified ${ASSETS.quote.feedDescription} — change it only if you have a reason to.`}
           >
             <Field
               label="Chainlink feed for the quote token"
