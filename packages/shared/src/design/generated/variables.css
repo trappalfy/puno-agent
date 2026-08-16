@@ -54,6 +54,11 @@
   --layout-section-gap: 80px;
   --layout-element-gap: 24px;
   --layout-max-width: 1280px;
+  --button-padding-x: 32px;
+  --button-padding-y: 18px;
+  --button-text-size: 16px;
+  --button-text-line-height: 1.5;
+  --button-text-tracking: -0.32px;
 }
 
 [data-density="terminal"] {
@@ -67,6 +72,11 @@
   --layout-section-gap: 24px;
   --layout-element-gap: 12px;
   --layout-max-width: none;
+  --button-padding-x: 16px;
+  --button-padding-y: 8px;
+  --button-text-size: 13px;
+  --button-text-line-height: 1.45;
+  --button-text-tracking: -0.01em;
   --layout-min-width: 1280px;
 }
 

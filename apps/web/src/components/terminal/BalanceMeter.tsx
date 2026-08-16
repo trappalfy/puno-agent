@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Card } from "../ui/Card";
+import { ButtonLink } from "../ui/ButtonLink";
 import { useBalance } from "@/lib/hooks/useBalance";
 import { useAgents } from "@/lib/hooks/useAgents";
 
@@ -54,12 +55,14 @@ export function BalanceMeter() {
               ? "Out of credit — your agent stays in protective mode (stop-loss and take-profit still run), but makes no new decisions until you top up."
               : "Out of credit. You have no agent running yet — top up and create one to put it to work."}
           </p>
-          <Link
-            href="/pricing"
-            className="mt-[var(--spacing-12)] inline-flex w-full items-center justify-center rounded-[var(--radius-buttons)] bg-lime-phosphor px-[var(--button-padding-x)] py-[var(--button-padding-y)] text-app-body-sm font-denim-ink font-semibold text-vault-floor transition-opacity hover:opacity-90"
-          >
+          {/* Was a hand-copy of the primary button's classes, which is the
+              duplication ButtonLink exists to end (see its module comment).
+              It had already been corrected here to the app type scale by
+              hand — the shared button now gets that from a density token, so
+              this can stop restating it and start inheriting it. */}
+          <ButtonLink href="/pricing" className="mt-[var(--spacing-12)] w-full">
             Top up
-          </Link>
+          </ButtonLink>
         </div>
       )}
 

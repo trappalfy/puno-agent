@@ -161,6 +161,23 @@ export interface DensityTokens {
      */
     buttonPaddingX: string;
     buttonPaddingY: string;
+    /**
+     * The button *label's* type, for exactly the same reason the padding is
+     * density-variant: a button is a box sized around a string, so fixing one
+     * half and hardcoding the other guarantees the pair goes wrong in one
+     * density.
+     *
+     * It did. Button.tsx set `text-body-sm` — the poster scale's 16px — and
+     * inherited the terminal padding underneath it, so every button in the
+     * product app carried a label *larger* than the 13-14px body text beside
+     * it inside a box scaled for the smaller density. The label ran to the
+     * edges and the control read as text with a hairline round it.
+     *
+     * DESIGN.md 174/238 already states the rule this restores: a component
+     * works in both densities by consuming role tokens rather than hardcoded
+     * pixel values. The type role was the one axis with no token to consume.
+     */
+    buttonText: TypeStyle;
   };
 }
 
@@ -174,6 +191,8 @@ export const posterDensity: DensityTokens = {
     maxWidth: "1280px",
     buttonPaddingX: "32px",
     buttonPaddingY: "18px",
+    // The value Button.tsx used to hardcode, so poster surfaces are unchanged.
+    buttonText: posterType.bodySm,
   },
 };
 
@@ -190,6 +209,12 @@ export const terminalDensity: DensityTokens = {
     minWidth: "1280px",
     buttonPaddingX: "16px",
     buttonPaddingY: "8px",
+    // The same role one density down — a control's label should read as body
+    // text, not as a heading. 13px × 1.45 ≈ 19px, which inside the 8px padding
+    // lands the button at 35px: one `--row-height` (36px) tall, so a button
+    // sits on the same grid as everything else in a dense view. The old 16px
+    // label made it 40px and off that grid.
+    buttonText: terminalType.bodySm,
   },
 };
 

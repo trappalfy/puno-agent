@@ -613,7 +613,12 @@ function NewAgentWizard() {
                       key={name}
                       type="button"
                       onClick={() => applyPreset(name)}
-                      className="rounded-[var(--radius-pills)] border border-moss-border px-[var(--spacing-12)] py-[var(--spacing-4)] text-num-sm text-white-muted font-jetbrains-mono transition-colors hover:border-lime-phosphor hover:text-lime-phosphor"
+                      // min-h is --min-tap-target, the accessibility floor
+                      // tokens.ts has always declared and nothing consumed.
+                      // 12px mono on 4px padding came to ~22px — a control a
+                      // third under the system's own minimum, and these three
+                      // rewrite every limit in the form when hit by accident.
+                      className="inline-flex min-h-[var(--min-tap-target)] items-center justify-center rounded-[var(--radius-pills)] border border-moss-border px-[var(--spacing-16)] py-[var(--spacing-4)] text-num-sm text-white-muted font-jetbrains-mono transition-colors hover:border-lime-phosphor hover:text-lime-phosphor"
                     >
                       {name}
                     </button>
@@ -854,6 +859,7 @@ function NewAgentWizard() {
           onDeploy={handleDeploy}
           canDeploy={canDeploy}
           resuming={vaultAddress !== null}
+          stepCount={deploySteps(chosen).length}
         />
       </div>
     </div>
@@ -876,12 +882,21 @@ function Mandate({
   onDeploy,
   canDeploy,
   resuming,
+  stepCount,
 }: {
   form: FormState;
   paper: boolean;
   onDeploy: () => void;
   canDeploy: boolean;
   resuming: boolean;
+  /**
+   * Passed in rather than recomputed: the caption under the Deploy button said
+   * "4 wallet signatures" from when the sequence was four. B2 made it one per
+   * allowlisted equity — six on testnet, nine on mainnet — so it undercounted
+   * the wallet prompts a user was about to be asked for, on the last screen
+   * before they commit. The step ledger beside it already counts correctly.
+   */
+  stepCount: number;
 }) {
   const name = form.agentName.trim();
   const expiry = new Date(Date.now() + AGENT_KEY_DAYS * 24 * 60 * 60 * 1000);
@@ -940,7 +955,9 @@ function Mandate({
           {resuming ? "Resume deployment" : "Deploy vault & arm agent"}
         </Button>
         <p className="mt-[var(--spacing-8)] text-center text-num-xs text-white-faint font-jetbrains-mono">
-          {resuming ? "Continues from the last confirmed step" : "4 wallet signatures"}
+          {resuming
+            ? "Continues from the last confirmed step"
+            : `${stepCount} wallet signature${stepCount === 1 ? "" : "s"}`}
         </p>
       </div>
     </Card>

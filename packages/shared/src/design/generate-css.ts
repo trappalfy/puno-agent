@@ -113,6 +113,14 @@ export function generateVariablesCss(): string {
   lines.push(`  --layout-max-width: ${posterDensity.layout.maxWidth};`);
   lines.push(`  --button-padding-x: ${posterDensity.layout.buttonPaddingX};`);
   lines.push(`  --button-padding-y: ${posterDensity.layout.buttonPaddingY};`);
+  // Emitted as literals rather than `var(--text-body-sm)`, even though that is
+  // where the value comes from: the type scale lives in Tailwind's @theme,
+  // which is a different file with its own emission rules, and a cross-file
+  // var reference would fail silently as a missing font-size rather than
+  // loudly. tokens.ts stays the single source either way.
+  lines.push(`  --button-text-size: ${posterDensity.layout.buttonText.size};`);
+  lines.push(`  --button-text-line-height: ${posterDensity.layout.buttonText.lineHeight};`);
+  lines.push(`  --button-text-tracking: ${posterDensity.layout.buttonText.tracking};`);
 
   lines.push("}");
   lines.push("");
@@ -129,6 +137,9 @@ export function generateVariablesCss(): string {
   lines.push(`  --layout-max-width: ${terminalDensity.layout.maxWidth};`);
   lines.push(`  --button-padding-x: ${terminalDensity.layout.buttonPaddingX};`);
   lines.push(`  --button-padding-y: ${terminalDensity.layout.buttonPaddingY};`);
+  lines.push(`  --button-text-size: ${terminalDensity.layout.buttonText.size};`);
+  lines.push(`  --button-text-line-height: ${terminalDensity.layout.buttonText.lineHeight};`);
+  lines.push(`  --button-text-tracking: ${terminalDensity.layout.buttonText.tracking};`);
   if (terminalDensity.layout.minWidth) {
     lines.push(`  --layout-min-width: ${terminalDensity.layout.minWidth};`);
   }

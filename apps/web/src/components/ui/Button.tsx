@@ -3,11 +3,24 @@ import type { ButtonHTMLAttributes } from "react";
 type Variant = "primary" | "ghost" | "danger";
 type Shape = "default" | "pill";
 
-/// landing.md — Lime Primary Button / Ghost Outline Button. Padding is
-/// "18px 32px" at poster density and tightens automatically in terminal
-/// density (see --button-padding-* in tokens.ts); radius is 16px in both.
+/// landing.md — Lime Primary Button / Ghost Outline Button. Every dimension
+/// here is a density role token, so one component serves both the poster
+/// surfaces and the product app: padding is "18px 32px" at poster density and
+/// tightens in terminal, radius is 16px / 10px, and the label follows the
+/// matching body-sm role (16px / 13px).
+///
+/// The label used to be a literal `text-body-sm` — the poster scale — while the
+/// padding around it was already density-aware. In the app that put a 16px
+/// label, bigger than the 13-14px body text next to it, inside a box padded for
+/// the smaller density: the text ran to the edges and the button read as a
+/// hairline round a string. See tokens.ts `buttonText`.
+///
+/// `whitespace-nowrap` because the box is sized by its label: let the label
+/// wrap and the second line has no padding budget of its own, which is the same
+/// defect arriving by a different route. A label too long for its container is
+/// a copy problem, and it should be visible as one.
 const base =
-  "inline-flex items-center justify-center gap-[var(--spacing-8)] font-denim-ink transition-colors disabled:opacity-40 disabled:pointer-events-none text-body-sm";
+  "inline-flex items-center justify-center gap-[var(--spacing-8)] whitespace-nowrap font-denim-ink transition-colors disabled:opacity-40 disabled:pointer-events-none text-[length:var(--button-text-size)] leading-[var(--button-text-line-height)] tracking-[var(--button-text-tracking)]";
 
 /**
  * Shape swaps the radius and padding rather than layering an override on top:

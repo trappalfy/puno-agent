@@ -96,7 +96,9 @@ export function TopUpCard() {
             key={usd}
             type="button"
             onClick={() => setSelectedUsd(usd)}
-            className={`flex-1 rounded-[var(--radius-tags)] border px-[var(--spacing-12)] py-[var(--spacing-8)] text-num-sm font-jetbrains-mono tabular-nums transition-colors ${
+            // min-h is --min-tap-target: 12px mono on 8px padding landed at
+            // ~30px, just under the floor the design system declares.
+            className={`inline-flex min-h-[var(--min-tap-target)] flex-1 items-center justify-center rounded-[var(--radius-tags)] border px-[var(--spacing-12)] py-[var(--spacing-8)] text-num-sm font-jetbrains-mono tabular-nums transition-colors ${
               selectedUsd === usd
                 ? "border-lime-phosphor text-lime-phosphor"
                 : "border-white/25 text-white-muted hover:border-white/50"
