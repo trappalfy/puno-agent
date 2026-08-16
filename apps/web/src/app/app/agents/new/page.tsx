@@ -1,15 +1,19 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useSwitchChain, useWriteContract } from "wagmi";
 import { parseUnits, type Address } from "viem";
 import {
   agentVaultAbi,
   vaultFactoryAbi,
-  getNetwork,
+  getNetworkByChainId,
   getAssets,
+  whyClosed,
+  NETWORKS,
   EQUITY_STALENESS_SECONDS,
+  type NetworkAssets,
+  type NetworkConfig,
   type TradableAsset,
 } from "@puno/shared";
 import { Card } from "@/components/ui/Card";
@@ -20,8 +24,22 @@ import { AddressChip } from "@/components/ui/AddressChip";
 import { NetworkBadge } from "@/components/ui/NetworkBadge";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 
-const network = getNetwork("testnet"); // testnet-only until a separate mainnet decision (plan 2.5 #1)
-
+/**
+ * There is deliberately no module-level `network` here any more.
+ *
+ * It used to be `getNetwork("testnet")`, and five constants were computed from
+ * it at import time — the asset registry, the quote-feed default, the router,
+ * the worker address, and the step ledger. The wizard deploys to **the chain the
+ * wallet is on**; there is nothing else it could mean, since every signature
+ * goes to that chain. So all of them are now per-render values, and the network
+ * comes from `useAccount().chainId`.
+ *
+ * Not `useChainId()`: verified in wagmi's source, `syncConnectedChain` refuses
+ * to adopt a chain that is not in the configured list, so it can only ever
+ * return 46630 or 4663 and defaults to the first. A wallet on Ethereum mainnet
+ * would read as testnet. `useAccount().chainId` reports the connector's real
+ * chain, which is what a gate has to see.
+ */
 const AGENT_KEY_DAYS = 30;
 
 type Step = "form" | "deploying" | "done";
@@ -53,16 +71,6 @@ type Preset = Omit<FormState, "agentName" | "quoteFeedAddress" | "quoteFeedStale
 /// heartbeat; the contract's own cap is 48h.
 const DEFAULT_FEED_STALENESS_HOURS = "26";
 const MAX_FEED_STALENESS_HOURS = 48;
-
-/**
- * Everything this network can trade, pinned and verified — see assets.ts.
- *
- * Declared up here rather than beside the other network constants further down
- * because `DEFAULTS` now reads the quote feed out of it, and a `const` used
- * before its declaration is a temporal-dead-zone error rather than a hoisted
- * one.
- */
-const ASSETS = getAssets(network.key);
 
 /**
  * The form takes percentages because that is how the same limits are read
@@ -121,23 +129,32 @@ const PRESETS = {
 type PresetName = keyof typeof PRESETS;
 const PRESET_NAMES = Object.keys(PRESETS) as PresetName[];
 
-const DEFAULTS: FormState = {
-  agentName: "",
-  // Prefilled from the pinned registry, which carries this network's verified
-  // quote feed alongside its `description()` — the same source the equity feeds
-  // below come from.
-  //
-  // It used to start empty, which made a Chainlink feed address the one thing a
-  // user had to type by hand, and left the only required field in the form
-  // unanswerable by anyone who had not read assets.ts. It was also the worst
-  // possible field to ask someone to paste: this project's security incident
-  // was a clipboard hijacker substituting addresses on copy, and a substituted
-  // feed here is an oracle the vault then trusts. Still editable — the registry
-  // is a default, not a lock.
-  quoteFeedAddress: ASSETS.quote.feed,
-  quoteFeedStalenessHours: DEFAULT_FEED_STALENESS_HOURS,
-  ...PRESETS.Balanced,
-};
+/**
+ * A function of the network, not a constant, because the quote feed is.
+ *
+ * That field is prefilled from the pinned registry, which carries each network's
+ * verified quote feed alongside its `description()`. It used to start empty,
+ * which made a Chainlink feed address the one thing a user had to type by hand,
+ * and left the only required field in the form unanswerable by anyone who had
+ * not read assets.ts. It was also the worst possible field to ask someone to
+ * paste: this project's security incident was a clipboard hijacker substituting
+ * addresses on copy, and a substituted feed here is an oracle the vault then
+ * trusts. Still editable — the registry is a default, not a lock.
+ *
+ * Being a function is what makes it safe once the wizard follows the wallet's
+ * chain. A single `DEFAULTS` seeded `useState` once, so filling the form on
+ * testnet and switching the wallet to mainnet before deploying would have
+ * written a **testnet feed address into a mainnet vault** — the same
+ * wrong-address failure the comment above is about, reached by a different road.
+ */
+function defaultsFor(assets: NetworkAssets): FormState {
+  return {
+    agentName: "",
+    quoteFeedAddress: assets.quote.feed,
+    quoteFeedStalenessHours: DEFAULT_FEED_STALENESS_HOURS,
+    ...PRESETS.Balanced,
+  };
+}
 
 type Errors = Partial<Record<keyof FormState, string>>;
 
@@ -224,17 +241,9 @@ const PREVIEW_AGENT = "0x2222222222222222222222222222222222222222" as Address;
  * On testnet `uniswapV3` is null and `routers.oneInch` holds the deployed
  * MockRouter, so this resolves to the mock exactly as before.
  */
-const TRADE_ROUTER: Address = network.uniswapV3?.swapRouter02 ?? network.routers.oneInch;
-
-/**
- * The address every vault created here is armed with: Puno's worker.
- *
- * Public by construction — the private half lives only in the worker's env, and
- * the worker refuses to start if the two disagree. See the `serviceAgent` note
- * in packages/shared/src/network/config.ts for why this is one shared address
- * rather than a key per vault.
- */
-const SERVICE_AGENT = network.serviceAgent;
+function tradeRouter(network: NetworkConfig): Address {
+  return network.uniswapV3?.swapRouter02 ?? network.routers.oneInch;
+}
 
 /**
  * The wallet signatures, in the order handleDeploy fires them.
@@ -245,10 +254,10 @@ const SERVICE_AGENT = network.serviceAgent;
  * point — a user asked to sign nine times deserves to see that six of them are
  * "wire up AAPL", not an unexplained queue of prompts.
  */
-function deploySteps(equities: TradableAsset[]) {
+function deploySteps(equities: TradableAsset[], quoteTicker: string) {
   return [
     { title: "Deploy the vault", call: "factory.createVault()" },
-    { title: `Set the ${ASSETS.quote.ticker} price feed`, call: "vault.setPriceFeed()" },
+    { title: `Set the ${quoteTicker} price feed`, call: "vault.setPriceFeed()" },
     ...equities.map((a) => ({
       title: `Set the ${a.ticker} price feed`,
       call: `vault.setPriceFeed() · ${a.ticker}`,
@@ -272,11 +281,29 @@ function NewAgentWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preview = PREVIEW_ENABLED ? searchParams.get("preview") : null;
-  const { address, isConnected } = useAccount();
-  const publicClient = usePublicClient();
+  const { address, isConnected, chainId: walletChainId } = useAccount();
+  const { switchChain } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
 
-  const [form, setForm] = useState<FormState>(DEFAULTS);
+  // The chain the wallet is on, if it is one we run. `undefined` means either
+  // not connected or connected to something else entirely — the gates below
+  // tell those two apart. In preview mode there is no wallet, so fall back to
+  // the free tier's network purely so the page renders.
+  const network: NetworkConfig | undefined = preview
+    ? NETWORKS.testnet
+    : getNetworkByChainId(walletChainId ?? -1);
+
+  // Pinned rather than ambient. `usePublicClient()` with no argument follows
+  // wagmi's current chain, so a switch mid-deploy would leave
+  // `waitForTransactionReceipt` polling the wrong chain — which does not error,
+  // it simply never resolves. A deploy that hangs forever is worse than one that
+  // fails, because the user cannot tell whether their money is gone.
+  const publicClient = usePublicClient(network ? { chainId: network.chainId } : {});
+
+  const assets = network ? getAssets(network.key) : undefined;
+  const serviceAgent = network?.serviceAgent ?? null;
+
+  const [form, setForm] = useState<FormState>(() => defaultsFor(assets ?? getAssets("testnet")));
   const [step, setStep] = useState<Step>("form");
   const [doneSteps, setDoneSteps] = useState(0);
   const [failedAt, setFailedAt] = useState<number | null>(null);
@@ -295,8 +322,10 @@ function NewAgentWizard() {
   // agent can only ever trade a subset of what it is permitted anyway. Each one
   // costs a signature, which is why they are visible and unselectable rather
   // than silently appended.
-  const [tickers, setTickers] = useState<string[]>(ASSETS.equities.map((a) => a.ticker));
-  const chosen = ASSETS.equities.filter((a) => tickers.includes(a.ticker));
+  const [tickers, setTickers] = useState<string[]>(() =>
+    (assets ?? getAssets("testnet")).equities.map((a) => a.ticker),
+  );
+  const chosen = (assets?.equities ?? []).filter((a) => tickers.includes(a.ticker));
 
   // Paper by default, and kept out of FormState because everything in there is
   // a string the `set` helper feeds from an input's value. Starts true for the
@@ -304,6 +333,37 @@ function NewAgentWizard() {
   // until this was sent, the create route hardcoded `dryRun: true` and no write
   // path existed to undo it, so every agent this wizard made was paper forever.
   const [paper, setPaper] = useState(true);
+
+  // The network the deploy is committed to, captured when it starts. A vault
+  // belongs to one chain forever, so once `createVault` has confirmed, switching
+  // the wallet must not move where the remaining signatures go.
+  const [target, setTarget] = useState<NetworkConfig | null>(null);
+
+  /**
+   * Re-seed the two network-derived form values when the wallet changes chain.
+   *
+   * Without this the wizard has a quiet, expensive bug: `useState` seeds once,
+   * so someone who fills the form on testnet, switches the wallet to mainnet and
+   * deploys would write **testnet's Chainlink feed address into a mainnet
+   * vault**. The vault would accept it — `setPriceFeed` only checks decimals —
+   * and then value its entire book through an oracle that is not the asset. That
+   * is the address-substitution failure this repo's security incident was about,
+   * arriving through the form instead of the clipboard.
+   *
+   * Deliberately only while the form is still editable and nothing is deployed.
+   * After `createVault` the vault exists on one chain and its feed address is
+   * already committed; resetting the field then would silently disagree with
+   * what is on-chain.
+   */
+  useEffect(() => {
+    if (!assets || step !== "form" || vaultAddress !== null) return;
+    setForm((f) => ({ ...f, quoteFeedAddress: assets.quote.feed }));
+    setTickers(assets.equities.map((a) => a.ticker));
+    // Keyed on `network?.key`, deliberately not on `assets`: the registry object
+    // is rebuilt on every render, so depending on it would re-seed on every
+    // keystroke and make the feed field impossible to edit. `assets` is read
+    // inside but is a pure function of that key.
+  }, [network?.key, step, vaultAddress]);
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -320,7 +380,15 @@ function NewAgentWizard() {
     ADDRESS_RE.test(form.quoteFeedAddress.trim());
 
   async function handleDeploy() {
-    if (!address || !publicClient || !network.vaultFactory || !SERVICE_AGENT) return;
+    const factory = network?.vaultFactory;
+    if (!address || !publicClient || !network || !factory || !serviceAgent) return;
+
+    // Captured, not read per signature. Every write below names this chain
+    // explicitly, so a wallet that changes network halfway through gets a
+    // ChainMismatchError before the prompt rather than a vault whose feeds,
+    // policy and agent key were written to two different chains.
+    const chainId = network.chainId;
+    setTarget(network);
     setErrorMsg(null);
     setFailedAt(null);
     setDoneSteps(0);
@@ -331,7 +399,7 @@ function NewAgentWizard() {
 
     try {
       const quoteToken = await publicClient.readContract({
-        address: network.vaultFactory,
+        address: factory,
         abi: vaultFactoryAbi,
         functionName: "quoteToken",
       });
@@ -340,13 +408,14 @@ function NewAgentWizard() {
       // second vault would strand the first one's gas.
       if (!vault) {
         const createTx = await writeContractAsync({
-          address: network.vaultFactory,
+          address: factory,
           abi: vaultFactoryAbi,
           functionName: "createVault",
+          chainId,
         });
         await publicClient.waitForTransactionReceipt({ hash: createTx });
         vault = await publicClient.readContract({
-          address: network.vaultFactory,
+          address: factory,
           abi: vaultFactoryAbi,
           functionName: "computeVaultAddress",
           args: [address],
@@ -365,6 +434,7 @@ function NewAgentWizard() {
           form.quoteFeedAddress as Address,
           Math.round(Number(form.quoteFeedStalenessHours) * 3600),
         ],
+        chainId,
       });
       await publicClient.waitForTransactionReceipt({ hash: feedTx });
       stage = 2;
@@ -386,6 +456,7 @@ function NewAgentWizard() {
           abi: agentVaultAbi,
           functionName: "setPriceFeed",
           args: [asset.token, asset.feed, EQUITY_STALENESS_SECONDS],
+          chainId,
         });
         await publicClient.waitForTransactionReceipt({ hash: assetFeedTx });
         stage += 1;
@@ -398,7 +469,7 @@ function NewAgentWizard() {
         functionName: "setPolicy",
         args: [
           {
-            allowedRouters: [TRADE_ROUTER],
+            allowedRouters: [tradeRouter(network)],
             allowedTokens: [quoteToken, ...chosen.map((a) => a.token)],
             maxNotionalPerTrade: parseUnits(form.maxNotionalPerTradeUsd, 18),
             maxDailyNotional: parseUnits(form.maxDailyNotionalUsd, 18),
@@ -407,6 +478,7 @@ function NewAgentWizard() {
             maxSlippageBps: BigInt(pctToBps(form.maxSlippagePct)),
           },
         ],
+        chainId,
       });
       await publicClient.waitForTransactionReceipt({ hash: policyTx });
       // Relative, not absolute: the equity loop above already advanced `stage`
@@ -434,7 +506,8 @@ function NewAgentWizard() {
         address: vault,
         abi: agentVaultAbi,
         functionName: "setAgent",
-        args: [SERVICE_AGENT, expiry],
+        args: [serviceAgent, expiry],
+        chainId,
       });
       await publicClient.waitForTransactionReceipt({ hash: agentTx });
       stage += 1;
@@ -450,7 +523,7 @@ function NewAgentWizard() {
           quoteToken,
           network: network.key,
           agentName: form.agentName,
-          agentAddress: SERVICE_AGENT,
+          agentAddress: serviceAgent,
           dryRun: paper,
           offChainLimits: {
             stopLossBps: form.stopLossPct ? pctToBps(form.stopLossPct) : null,
@@ -464,7 +537,7 @@ function NewAgentWizard() {
       if (!res.ok)
         throw new Error(`Vault is live on-chain, but recording it failed (${res.status}).`);
 
-      setResult({ agentAddress: SERVICE_AGENT });
+      setResult({ agentAddress: serviceAgent });
       setStep("done");
     } catch (err) {
       setFailedAt(stage);
@@ -473,12 +546,15 @@ function NewAgentWizard() {
     }
   }
 
+  const previewAssets = getAssets("testnet");
+
   if (preview === "deploying") {
     return (
       <DeployLedger
-        steps={deploySteps(ASSETS.equities)}
+        steps={deploySteps(previewAssets.equities, previewAssets.quote.ticker)}
         doneSteps={2}
         vaultAddress={PREVIEW_VAULT}
+        explorerUrl={NETWORKS.testnet.explorerUrl}
       />
     );
   }
@@ -489,6 +565,7 @@ function NewAgentWizard() {
         vaultAddress={PREVIEW_VAULT}
         agentAddress={PREVIEW_AGENT}
         paper
+        explorerUrl={NETWORKS.testnet.explorerUrl}
         onDone={() => router.push("/app")}
       />
     );
@@ -505,24 +582,61 @@ function NewAgentWizard() {
     );
   }
 
-  if (!preview && !network.vaultFactory) {
+  // A chain we do not run. This gate did not exist before, because the wizard
+  // was pinned to one network and never asked — so a wallet on Ethereum would
+  // have been shown the form and allowed to sign against addresses that mean
+  // nothing there.
+  if (!network) {
     return (
       <Gate
-        title={`No factory on ${network.name} yet`}
-        body={`Agents are created by a VaultFactory contract, and none has been deployed to ${network.name} (chain ${network.chainId}) yet. There is nothing to configure until it is — deployment is blocked on a funded deployer key.`}
+        title="Your wallet is on a chain Puno does not run"
+        body="Puno runs on Robinhood Chain and its testnet. Switch the wallet to one of them to continue."
+      >
+        <div className="flex flex-wrap gap-[var(--spacing-12)]">
+          {Object.values(NETWORKS).map((n) => (
+            <Button key={n.key} onClick={() => switchChain({ chainId: n.chainId })}>
+              Switch to {n.name}
+            </Button>
+          ))}
+        </div>
+      </Gate>
+    );
+  }
+
+  // One gate replacing the two hand-written ones (no factory / no worker), and
+  // it also covers the case neither did: a network where PUNO has not launched,
+  // so a vault could be created but never funded with credit. The body *is* the
+  // predicate's own reason, which is what stops the copy and the condition
+  // drifting apart — see `whyClosed` in packages/shared/src/network/policy.ts.
+  const closed = preview ? null : whyClosed(network);
+  if (closed) {
+    return (
+      <Gate
+        title={`${network.name} is not open yet`}
+        body={`${closed[0]!.toUpperCase()}${closed.slice(1)}. Creating one here would cost you real gas for a vault that cannot work.`}
       />
     );
   }
 
-  // Same shape as the factory gate above, and for the same reason: a vault
-  // armed with nothing is worse than no vault, because the user pays for every
-  // signature first and only then finds out nothing can trade it.
-  if (!preview && !SERVICE_AGENT) {
+  // `network` is narrowed by the gate above, so this is the registry for the
+  // chain the wallet is actually on.
+  const activeAssets = getAssets(network.key);
+  const steps = deploySteps(chosen, activeAssets.quote.ticker);
+
+  // A half-deployed vault belongs to one chain forever. If the wallet has moved
+  // off it, the remaining signatures cannot be sent and re-running the deploy
+  // against the new chain would create a *second* vault while the first sits
+  // paid for and unfinished.
+  if (!preview && target && vaultAddress && target.chainId !== walletChainId) {
     return (
       <Gate
-        title={`No worker on ${network.name} yet`}
-        body={`Vaults are armed with Puno's worker address, and none is configured for ${network.name} (chain ${network.chainId}). Creating one here would deploy a vault that nothing can trade.`}
-      />
+        title={`Your vault is on ${target.name}`}
+        body={`It is deployed and paid for, but only partly configured. Switch the wallet back to ${target.name} (chain ${target.chainId}) to finish it — creating a new one here would strand it.`}
+      >
+        <Button onClick={() => switchChain({ chainId: target.chainId })}>
+          Switch to {target.name}
+        </Button>
+      </Gate>
     );
   }
 
@@ -532,6 +646,7 @@ function NewAgentWizard() {
         vaultAddress={vaultAddress}
         agentAddress={result.agentAddress}
         paper={paper}
+        explorerUrl={(target ?? network).explorerUrl}
         onDone={() => router.push("/app")}
       />
     );
@@ -539,7 +654,12 @@ function NewAgentWizard() {
 
   if (step === "deploying") {
     return (
-      <DeployLedger steps={deploySteps(chosen)} doneSteps={doneSteps} vaultAddress={vaultAddress} />
+      <DeployLedger
+        steps={steps}
+        doneSteps={doneSteps}
+        vaultAddress={vaultAddress}
+        explorerUrl={(target ?? network).explorerUrl}
+      />
     );
   }
 
@@ -568,7 +688,7 @@ function NewAgentWizard() {
                 telling someone who stopped at step 5 that there were 4. */}
             {failedAt === 0
               ? "Nothing was deployed"
-              : `Stopped after step ${failedAt} of ${deploySteps(chosen).length}`}
+              : `Stopped after step ${failedAt} of ${steps.length}`}
           </p>
           <p className="mt-[var(--spacing-4)] text-app-body-sm text-white-muted">{errorMsg}</p>
           {vaultAddress && (
@@ -737,7 +857,7 @@ function NewAgentWizard() {
           <Fieldset
             title="Price feed"
             note="Required"
-            body={`The vault values its own book through this Chainlink feed. Prefilled with ${network.name}'s verified ${ASSETS.quote.feedDescription} — change it only if you have a reason to.`}
+            body={`The vault values its own book through this Chainlink feed. Prefilled with ${network.name}'s verified ${activeAssets.quote.feedDescription} — change it only if you have a reason to.`}
           >
             <Field
               label="Chainlink feed for the quote token"
@@ -770,7 +890,7 @@ function NewAgentWizard() {
             body="Each one is written into the vault's allowlist and wired to its own Chainlink feed. Both are on-chain limits: the agent cannot touch a token that is not here, whatever it decides."
           >
             <div className="flex flex-col gap-[var(--spacing-8)]">
-              {ASSETS.equities.map((asset) => {
+              {activeAssets.equities.map((asset) => {
                 const on = tickers.includes(asset.ticker);
                 return (
                   <label
@@ -796,12 +916,12 @@ function NewAgentWizard() {
             </div>
             {chosen.length === 0 && (
               <p className="mt-[var(--spacing-12)] text-app-body-sm text-signal-amber">
-                With nothing selected the agent can hold only {ASSETS.quote.ticker} and will decline
-                every trade it proposes.
+                With nothing selected the agent can hold only {activeAssets.quote.ticker} and will
+                decline every trade it proposes.
               </p>
             )}
             <p className="mt-[var(--spacing-12)] text-app-body-sm text-white-muted">
-              Each one adds a wallet signature — {deploySteps(chosen).length} in total.
+              Each one adds a wallet signature — {steps.length} in total.
             </p>
           </Fieldset>
 
@@ -859,7 +979,7 @@ function NewAgentWizard() {
           onDeploy={handleDeploy}
           canDeploy={canDeploy}
           resuming={vaultAddress !== null}
-          stepCount={deploySteps(chosen).length}
+          stepCount={steps.length}
         />
       </div>
     </div>
@@ -1066,19 +1186,25 @@ function Gate({
 /* ------------------------------------------------------------------ */
 
 /**
- * Four signatures fire in sequence, so a single spinner leaves the user
- * unable to tell which prompt their wallet is showing — or, on a rejection,
- * how much of the vault already exists. The ledger names every step and keeps
- * the completed ones on screen.
+ * Signatures fire in sequence — six on testnet, nine on mainnet — so a single
+ * spinner leaves the user unable to tell which prompt their wallet is showing,
+ * or, on a rejection, how much of the vault already exists. The ledger names
+ * every step and keeps the completed ones on screen.
+ *
+ * `explorerUrl` is passed in rather than read from a module constant: the vault
+ * being deployed belongs to whichever chain the wallet is on, and a link to the
+ * other network's explorer would show "not found" for a vault that exists.
  */
 function DeployLedger({
   steps,
   doneSteps,
   vaultAddress,
+  explorerUrl,
 }: {
   steps: { title: string; call: string }[];
   doneSteps: number;
   vaultAddress: Address | null;
+  explorerUrl: string;
 }) {
   return (
     <div className="mx-auto max-w-lg py-[var(--spacing-48)]">
@@ -1130,7 +1256,7 @@ function DeployLedger({
         {vaultAddress && (
           <div className="mt-[var(--spacing-24)] flex items-center justify-between border-t border-moss-border pt-[var(--spacing-16)]">
             <span className="text-app-body-sm text-white-muted">Your vault</span>
-            <AddressChip address={vaultAddress} explorerBaseUrl={network.explorerUrl} />
+            <AddressChip address={vaultAddress} explorerBaseUrl={explorerUrl} />
           </div>
         )}
       </Card>
@@ -1159,11 +1285,15 @@ function AgentArmed({
   vaultAddress,
   agentAddress,
   paper,
+  explorerUrl,
   onDone,
 }: {
   vaultAddress: Address;
   agentAddress: Address;
   paper: boolean;
+  /// The explorer for the chain this vault was actually deployed to — see
+  /// DeployLedger for why it cannot be a module constant.
+  explorerUrl: string;
   onDone: () => void;
 }) {
   return (
@@ -1181,11 +1311,11 @@ function AgentArmed({
       <Card className="mt-[var(--spacing-24)] flex flex-col gap-[var(--spacing-12)]">
         <div className="flex items-center justify-between">
           <span className="text-app-body-sm text-white-muted">Vault</span>
-          <AddressChip address={vaultAddress} explorerBaseUrl={network.explorerUrl} />
+          <AddressChip address={vaultAddress} explorerBaseUrl={explorerUrl} />
         </div>
         <div className="flex items-center justify-between">
           <span className="text-app-body-sm text-white-muted">Armed agent</span>
-          <AddressChip address={agentAddress} explorerBaseUrl={network.explorerUrl} />
+          <AddressChip address={agentAddress} explorerBaseUrl={explorerUrl} />
         </div>
       </Card>
 
