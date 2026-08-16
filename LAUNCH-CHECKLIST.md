@@ -718,6 +718,24 @@ deposit poll: the rate expires whether or not anyone is depositing, and the quie
 worth catching. **When it does expire nothing is lost** — the indexer refuses to advance its
 cursor past an event it could not value, and every deposit replays once a rate is set.
 
+**The manual rate is a bridge, and its successor is already a seam.** `readPoolTwap()` returns
+null today, and `resolveTokenPrice` already prefers it over anything written by hand — marking it
+`usableForCredit` with no staleness window at all, because a pool read is current by construction.
+When PUNO has a pool, exactly one function changes and the manual rate demotes itself to the
+fallback it should always have been. Nothing else in the pricing path moves.
+
+**Read the pool, not a price API.** DexScreener does index this chain (`chainId: "robinhood"`,
+confirmed 2026-08-16) and is the obvious thing to reach for once trading starts, but it is the
+wrong input for the crediting path on three counts, none of them about uptime. It reports spot,
+and spot is buyable: push the pool up, deposit at the inflated rate, let it fall back — a TWAP
+makes an attacker hold the move for the whole window, which costs real money. It puts a third
+party in the money path, where this project's rule is that a failed credit is replayable from
+chain and a wrong one is not. And it returns _pairs_, plural, so "which pool" becomes a heuristic
+that anyone can seed a second pool to play with, where a pinned address is a decision made once
+and auditable. DexScreener earns a place as a divergence alarm against our own read — that catches
+the pinned pool going illiquid, which an on-chain read cannot report about itself — but not as the
+number a deposit is valued at.
+
 Also carried over and still true: `CREDITS_WATCHER_START_BLOCK` in the root `.env` holds a
 **testnet** block, and the indexer's cursor is keyed by `chainId` rather than by contract
 address — so a `PunoCredits` redeploy on the same chain reuses the old cursor.
