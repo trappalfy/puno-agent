@@ -166,26 +166,42 @@ free run cannot spend real gas — but the web app does not implement it.
 - [x] **`FREE_TIER_NETWORK`** replaces two independent copies of the same literal in `lib/trial.ts`
       and `/demo` — a pair that could drift with nothing failing.
 
-**Still open, and it is the web app:**
+**Web half closed 2026-08-16.** All five pins are gone from production code; what remains are
+test fixtures naming a network on purpose and one comment recording what used to be there.
 
-- [ ] **Explicit `chainId` on every remaining browser read and write** — `useMarketSession`,
-      `KillSwitch`, `SessionKeyCard`, `RiskLimitsPanel`, the wizard. Verified in wagmi's source:
-      a write with no `chainId` skips `assertCurrentChain` and goes to whatever chain the wallet
-      is on; a read resolves against `config.state.chainId`, so a mainnet vault's address gets
-      read over the testnet RPC. On `useReadContracts` the key goes on **each contract entry** —
-      a top-level one is silently ignored. **This must land before the global guard comes off.**
-- [ ] **Three remaining hardcoded `getNetwork("testnet")` pins** — `app/api/auth/verify`, the
-      wizard, `NetworkGuard`/`Sidebar`. Each carries a comment saying it waits on an explicit
-      mainnet decision. That decision is now made, so they have to go.
-- [ ] **`useChainId()` cannot report a chain we do not run.** wagmi's `syncConnectedChain` drops
-      any chain not in `chains: [...]`, so it returns testnet by default and a wallet on Ethereum
-      mainnet **passes today's `NetworkGuard`**. The replacement must read `useAccount().chainId`.
-- [ ] **The wizard's `DEFAULTS` seed `useState`.** Fill the form on testnet, switch the wallet to
-      mainnet, deploy — and a **testnet Chainlink feed address is written into a mainnet vault**.
-      That is the address-substitution failure this repo's security incident was about, arriving
-      by a different route. Re-seed on network change, and pin the deploy to a captured target
-      chain: `usePublicClient` without an explicit `chainId` would poll the wrong chain after a
-      switch and hang forever rather than fail.
+- [x] **Explicit `chainId` on every browser read and write.** Verified in wagmi's source, and the
+      reason the ordering mattered: a write with no `chainId` skips `assertCurrentChain` and goes
+      to whatever chain the wallet is on, while a read resolves against `config.state.chainId`, so
+      a mainnet vault's address gets read over the testnet RPC — which returns _data_, not an
+      error. On `useReadContracts` the key goes on **each contract entry**; a top-level one is
+      accepted and silently ignored, which is a fix that looks right and does nothing.
+- [x] **`RequireNetwork` replaces `NetworkGuard`**, declared per surface. Most surfaces need
+      nothing, because pinned reads are correct on any chain — what needs a gate is a **write**.
+      Three mounts, all inline around an action: the kill switch and the key revoke (the vault's
+      own network, inside each owner check so non-owners are not prompted for a control they are
+      not offered), and the top-up button (whichever network sells credit). That last one was
+      never behind the old guard at all — it renders on `/pricing`, outside `/app/*`, and it is
+      the only place in the app where the wrong chain costs money rather than confusion.
+- [x] **`useChainId()` is no longer used for gating.** `syncConnectedChain` drops any chain not in
+      the configured list, so it returns testnet by default and a wallet on Ethereum **passed the
+      old guard**. Everything now reads `useAccount().chainId`, and `describeChain` names a
+      foreign chain honestly instead of rounding it to one of ours.
+- [x] **The wizard follows the wallet's chain.** Its five import-time constants are per-render
+      values; `DEFAULTS` became `defaultsFor(assets)` and is re-seeded on chain change, closing
+      the case where filling the form on testnet and switching to mainnet wrote a **testnet
+      Chainlink feed into a mainnet vault**. The deploy captures its target chain, so
+      `waitForTransactionReceipt` cannot end up polling the wrong one and hanging forever, and a
+      half-deployed vault asks the user to switch back rather than letting a retry create a
+      second one.
+- [x] **SIWE accepts either of our chains.** It signed and verified a compiled-in `46630`, so a
+      mainnet wallet failed with "signature did not match" halfway through the journey the
+      product is built around. `domain`, `uri`, the single-use nonce and the address are all
+      unchanged; the accepted set widens from one message to two. `chainId` is validated as an
+      **integer**, not just as a known value — `buildSiweMessage` joins with newlines, so a string
+      would let a caller append lines to the message being verified.
+- [x] **Copy that asserted one network is derived now.** The GeoGate consent dialog said "no real
+      funds are at risk"; left as text, that becomes a materially false risk statement the moment
+      mainnet opens. "Free, on testnet" was left alone — permanently true by product decision.
 - [ ] **The SIWE session is signed with `chainId: 46630`.** A user who takes the free run on
       testnet and then creates a paid mainnet vault crosses networks mid-journey, so this is not a
       constant swap — it needs a re-auth path, or a session that is not chain-scoped.
@@ -389,7 +405,7 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | `pnpm -r typecheck`                  | 4/4 projects clean                     |
 | `pnpm lint`                          | clean                                  |
 | `pnpm format:check`                  | clean — a real signal since 2026-08-15 |
-| `pnpm test`                          | **182** — shared 72, agent 80, web 30  |
+| `pnpm test`                          | **196** — shared 72, agent 80, web 44  |
 | `forge test -vv` (from `contracts/`) | **80/80**                              |
 | `pnpm -r build`                      | both apps build; `web` emits 21 routes |
 
