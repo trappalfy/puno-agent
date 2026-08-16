@@ -276,6 +276,12 @@ time, so `node --import tsx` is what actually runs in production. It sat in `dev
 until 2026-08-16, which meant a `pnpm install --prod` image would build cleanly and die on boot
 with "command not found" — a packaging bug that surfaces only once deployed.
 
+**`DEPLOYMENT.md` is in Russian, deliberately — do not translate it back.** It is the one file a
+human executes by hand rather than one an agent reads between sessions, and its reader writes
+Russian. The rule below ("the codebase and its comments are in English") still holds everywhere
+else, including this file and `LAUNCH-CHECKLIST.md`. Identifiers, commands, env var names and
+paths stay English inside it: those are typed, not read.
+
 **Deployment lives in `DEPLOYMENT.md`**; artifacts are `apps/agent/Dockerfile`,
 `apps/agent/fly.testnet.toml` and a `vercel.json` per app. Written but **never built or
 deployed** — do not describe hosting as working. Two traps recorded there: `fly deploy` must run

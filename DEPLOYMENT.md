@@ -1,335 +1,300 @@
-# Deployment
+# Развёртывание
 
-Written 2026-08-16. Until now the web app, the database and the worker all ran on one laptop —
-there was no `Dockerfile`, no `vercel.json` and no CI, and `docker-compose.yml` starts Postgres
-alone.
+> Единственный файл в репозитории на русском языке, и это осознанно. Всё остальное — код,
+> комментарии, `CLAUDE.md`, `LAUNCH-CHECKLIST.md` — по-английски, как требует `CLAUDE.md`. Этот
+> документ отличается тем, что его **выполняет человек руками**, а не читает агент между
+> сессиями. Не переводите его обратно. Идентификаторы, команды, имена переменных и путей
+> остаются английскими: это не проза, а то, что набирают в терминале.
 
-**Do this on testnet, well before the token launch.** The rehearsal is the point. T-0 should
-change addresses, not architecture, and the largest product gap is the absence of a public track
-record — which closes only by a worker running somewhere that stays on. Every day it does not is
-a day missing from that record.
+Написано 2026-08-16. До сих пор приложение, база и воркер работали на одном ноутбуке: не было ни
+`Dockerfile`, ни `vercel.json`, ни CI, а `docker-compose.yml` поднимает только Postgres.
 
-## What is in the repo, and what is not
+**Делать это на тестнете, задолго до запуска токена.** Репетиция и есть смысл: в день T-0 должны
+меняться адреса, а не архитектура. Плюс главная продуктовая дыра — отсутствие публичного
+трек-рекорда, а он закрывается только временем. Каждый день, когда воркер не работает где-то
+постоянно, — день, которого в этой истории не будет.
 
-| Artifact                      | State                                                               |
-| ----------------------------- | ------------------------------------------------------------------- |
-| `apps/agent/Dockerfile`       | Written. **Not built** — no Docker on the machine it was written on |
-| `.dockerignore`               | Written                                                             |
-| `apps/agent/fly.testnet.toml` | Written. Mainnet needs its own file, deliberately                   |
-| `apps/web/vercel.json`        | Written. Dashboard settings below                                   |
-| `apps/site/vercel.json`       | Written                                                             |
-| CI                            | None. Not required to deploy                                        |
-| Health endpoint               | None. See _Known gaps_                                              |
+## Что есть в репозитории, а чего нет
 
-Everything above is unverified against a real platform. The first `fly deploy` is the test, and
-the failures it finds should be corrected here rather than worked around.
+| Артефакт                      | Состояние                                                   |
+| ----------------------------- | ----------------------------------------------------------- |
+| `apps/agent/Dockerfile`       | Написан. **Не собран** — на машине, где писался, нет Docker |
+| `.dockerignore`               | Написан                                                     |
+| `apps/agent/fly.testnet.toml` | Написан. Мейннету нужен свой файл, намеренно                |
+| `apps/web/vercel.json`        | Написан. Настройки дашборда — ниже                          |
+| `apps/site/vercel.json`       | Написан                                                     |
+| CI                            | Нет. Для деплоя не обязателен                               |
+| Health-эндпоинт               | Нет. См. _Известные пробелы_                                |
 
-## Secrets: the rule before the table
+Ничего из перечисленного не проверено на живой площадке. Первый `fly deploy` и будет проверкой, а
+то, что она вскроет, надо править здесь, а не обходить.
 
-**Never paste a secret into a chat, an issue, or a commit — including `DATABASE_URL`, which
-carries the password.** Put them straight into the platform's own store: `fly secrets set` and
-Vercel's environment variables. Both encrypt at rest and neither round-trips through this repo.
+## Правило про секреты, прежде чем таблица
 
-The root `.env` currently holds the whole set in plaintext on one laptop. Once the platforms have
-them, delete the local copies of anything that reaches production.
+**Никогда не вставляйте секрет в чат, в issue или в коммит — включая `DATABASE_URL`, в котором
+лежит пароль.** Они вводятся прямо в хранилище площадки: `fly secrets set` и переменные окружения
+Vercel. Оба шифруют их у себя, и ни один не проходит через этот репозиторий.
 
-Which service needs what — verified by reading the code, not the old `.env.example`:
+Сейчас корневой `.env` держит весь набор открытым текстом на одном ноутбуке. После того как
+площадки их получат, локальные копии того, что попало в продакшн, надо удалить.
 
-| Variable                       | web | worker | Notes                                                                           |
-| ------------------------------ | :-: | :----: | ------------------------------------------------------------------------------- |
-| `DATABASE_URL`                 |  ●  |   ●    | The only variable the worker actually requires                                  |
-| `SESSION_SECRET`               |  ●  |        | Regenerate; the pre-reinstall value is compromised                              |
-| `ENCRYPTION_KEY`               |  ●  |        | Encrypts users' own Anthropic keys at rest                                      |
-| `ANTHROPIC_API_KEY`            |     |   ●    | Ours, for users without their own                                               |
-| `AGENT_PRIVATE_KEY`            |     |   ●    | **One per network.** Must derive to that network's `serviceAgent`               |
-| `NETWORK`                      |     |   ●    | In `fly.testnet.toml`, not a secret                                             |
-| `DRY_RUN`                      |     |   ●    | In `fly.testnet.toml`. Unset or empty = simulate; unrecognised = refuse to boot |
-| `CREDITS_WATCHER_START_BLOCK`  |     |   ●    | Per network. Unset means "from the head"                                        |
-| `RPC_URL_MAINNET` / `_TESTNET` |  ○  |        | Optional; falls back to the public RPC in `config.ts`                           |
-| `RPC_URL`                      |     |   ○    | The worker's own, single-network                                                |
-| `VITE_APP_URL`                 |     |        | `apps/site` only — the product app's origin                                     |
+Кому что нужно — проверено по коду, а не по устаревшему `.env.example`:
 
-`RPC_URL_MAINNET` is optional but worth setting: the public mainnet RPC sits behind Cloudflare and
-rejects batched JSON-RPC POSTs, returning an HTML interstitial. A paid endpoint removes a class of
-failure that will otherwise look like random RPC errors.
+| Переменная                     | web | воркер | Примечание                                                             |
+| ------------------------------ | :-: | :----: | ---------------------------------------------------------------------- |
+| `DATABASE_URL`                 |  ●  |   ●    | Единственная переменная, которая воркеру действительно обязательна     |
+| `SESSION_SECRET`               |  ●  |        | Сгенерировать заново; значение до переустановки скомпрометировано      |
+| `ENCRYPTION_KEY`               |  ●  |        | Шифрует Anthropic-ключи пользователей в базе                           |
+| `ANTHROPIC_API_KEY`            |     |   ●    | Наш, для тех, у кого нет своего                                        |
+| `AGENT_PRIVATE_KEY`            |     |   ●    | **По одному на сеть.** Должен выводиться в `serviceAgent` этой сети    |
+| `NETWORK`                      |     |   ●    | В `fly.testnet.toml`, не секрет                                        |
+| `DRY_RUN`                      |     |   ●    | В `fly.testnet.toml`. Пусто = симуляция; непонятное = отказ стартовать |
+| `CREDITS_WATCHER_START_BLOCK`  |     |   ●    | По сети. Не задано = «с текущей головы цепи»                           |
+| `RPC_URL_MAINNET` / `_TESTNET` |  ○  |        | Необязательны; иначе публичный RPC из `config.ts`                      |
+| `RPC_URL`                      |     |   ○    | Собственный у воркера, одна сеть                                       |
+| `VITE_APP_URL`                 |     |        | Только `apps/site` — адрес продуктового приложения                     |
 
-Both apps load the monorepo-root `.env` explicitly (`next.config.ts`, `agent/src/config.ts`). That
-file does not exist on either platform, and dotenv treats a missing path as a no-op without
-overwriting anything already set — so the platform's own variables win and neither line needs a
-special case for production.
+`RPC_URL_MAINNET` необязателен, но поставить стоит: публичный мейннет-RPC стоит за Cloudflare и
+отбивает батчевые JSON-RPC POST-запросы, возвращая HTML-заглушку. Платный эндпоинт убирает целый
+класс отказов, которые иначе выглядят как случайные ошибки RPC.
 
-## The owner's walkthrough
+Оба приложения явно загружают корневой `.env` (`next.config.ts`, `agent/src/config.ts`). На
+площадках этого файла нет, а dotenv на несуществующем пути просто ничего не делает и **не
+перезаписывает** уже заданные переменные — так что секреты площадки выигрывают, и обе эти строки
+не нуждаются в особом случае для продакшна.
 
-Every click and every command, in order. Roughly 40 minutes. Nothing here is reversible in a way
-that matters — a wrong value is a re-paste, not a redeploy from scratch.
+---
 
-Two secrets have to be **generated**, two have to be **copied from the local `.env`**, and one
-comes from Anthropic. That distinction matters, so it is called out at each step.
+## Порядок действий
 
-### Step 1 — Postgres on Neon
+Каждый клик и каждая команда, по порядку. Примерно 40 минут. Ничего необратимого здесь нет: не то
+значение — это пере-вставка, а не деплой заново.
 
-1. Open <https://neon.tech> and sign up with GitHub.
-2. **Create project.** Name `puno`. Pick the region closest to you; leave the Postgres version at
-   the default.
-3. On the project page find **Connection string**. Switch the toggle to **Pooled connection** —
-   serverless functions open many short-lived connections, and the direct string will exhaust the
-   limit.
-4. Copy it. It looks like `postgresql://user:password@host/db?sslmode=require`.
+Базы раньше того, что из них читает; воркер раньше веб-приложения, чтобы отказы первого деплоя
+пришлись туда, куда никто не смотрит.
 
-**This string contains a password. Do not paste it into a chat, an issue, or a file in this
-repository.** It goes only into Fly's and Vercel's secret stores, in the steps below.
+Два секрета надо **сгенерировать**, один — **скопировать из локального `.env`**, один взять у
+Anthropic. Разница важная, поэтому на каждом шаге оговорена.
 
-### Step 2 — generate the two web secrets
+### Шаг 1 — Postgres на Neon
 
-Run twice in a terminal, and keep the two outputs apart:
+1. Откройте <https://neon.tech> и зарегистрируйтесь через GitHub.
+2. **Create project.** Имя `puno`. Регион поближе к себе; версию Postgres оставьте по умолчанию.
+3. На странице проекта найдите **Connection string** и переключите на **Pooled connection**.
+   Serverless-функции открывают много коротких соединений, и прямая строка упрётся в лимит.
+4. Скопируйте. Выглядит так: `postgresql://user:password@host/db?sslmode=require`.
+
+`CreditsDb` не зависит от драйвера, а схема — обычный Postgres, так что ничего специфичного для
+провайдера здесь нет; Supabase подойдёт так же.
+
+**В этой строке пароль. Не вставляйте её в чат, в issue и в файлы репозитория.** Она попадает
+только в хранилища Fly и Vercel, на шагах ниже.
+
+### Шаг 2 — сгенерировать два секрета для веба
+
+Выполните дважды, ответы держите порознь:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-The first is `SESSION_SECRET` (signs login cookies), the second is `ENCRYPTION_KEY` (AES-256-GCM
-over users' own Anthropic keys, 32-byte hex). Generate **fresh** ones rather than reusing the
-local values: the production database starts empty, so no existing ciphertext depends on the old
-key, and a development machine should not hold the key protecting users' secrets.
+Первый — `SESSION_SECRET` (подписывает cookie входа), второй — `ENCRYPTION_KEY` (AES-256-GCM над
+чужими Anthropic-ключами, 32 байта в hex).
 
-They are deliberately two different values — leaking the cookie signer must not implicate the key
-protecting stored API keys.
+Именно **новые**, а не из локального `.env`: продакшн-база стартует пустой, значит старым ключом
+ничего не зашифровано, а ключ, защищающий чужие секреты, не должен лежать на машине разработки.
 
-### Step 3 — create the tables, and set a rate
+Это намеренно два разных значения — утечка подписывателя cookie не должна задевать ключ, которым
+защищены сохранённые API-ключи.
 
-The Neon database is empty, and the web app queries it on almost every page. Deploy before this
-and every one of them is a 500.
+### Шаг 3 — создать таблицы и поставить курс
 
-Migrations normally run as Fly's `release_command`, so skipping Fly means running them by hand,
-once, from this laptop. PowerShell has no inline environment prefix, so set the variable first:
+База в Neon пустая, а приложение обращается к ней почти на каждой странице. Задеплоить до этого
+шага — получить 500 на всём.
+
+Миграции обычно выполняет `release_command` у Fly, поэтому если Fly откладывается, их надо
+прогнать руками один раз с этого ноутбука. В PowerShell нет префикса переменных в строке команды,
+так что сначала присвоение:
 
 ```powershell
-$env:DATABASE_URL = "<the Neon string>"
+$env:DATABASE_URL = "<строка из Neon>"
 pnpm --filter @puno/agent db:migrate
 pnpm --filter @puno/agent set-rate -- 0.000001 --note "testnet launch"
 Remove-Item Env:\DATABASE_URL
 ```
 
-In Git Bash the one-line form works instead: `DATABASE_URL="..." pnpm --filter @puno/agent db:migrate`.
+В Git Bash работает однострочная форма: `DATABASE_URL="..." pnpm --filter @puno/agent db:migrate`.
 
-The variable set in the shell wins over the root `.env` — dotenv never overwrites something
-already present — so this cannot touch the local database by accident. Clear it afterwards so the
-next command in that terminal does not silently talk to production.
+Переменная, заданная в оболочке, перебивает корневой `.env` — dotenv никогда не перезаписывает уже
+существующее, — поэтому случайно попасть в локальную базу нельзя. Последняя строка убирает её,
+чтобы следующая команда в том же терминале не ушла молча в продакшн.
 
-Expect `Migrations applied.` and thirteen tables. The rate has to be set separately because it
-lives in Postgres rather than in config, and without it `/api/pricing` returns `tokenPrice: null`
-and every price falls back to dollars — the landing page would quietly stop quoting PUNO.
+Ожидается `Migrations applied.` и тринадцать таблиц. Скрипт называется `db:migrate`, а не
+`migrate`.
 
-The script is `db:migrate`, not `migrate`.
+Курс ставится отдельной командой, потому что живёт в Postgres, а не в конфиге. Без него
+`/api/pricing` вернёт `tokenPrice: null`, и все цены свалятся обратно в доллары — лендинг тихо
+перестанет показывать PUNO.
 
-### Step 4 — the worker on Fly
+### Шаг 4 — воркер на Fly
 
-**Fly needs a card.** The permanent free tier ended in 2024; a new account gets a trial of two VM
-hours or seven days, whichever runs out first, and after that every machine is billed. One
-always-on `shared-cpu-1x` at 256 MB is about **$1.94/month**, at 512 MB about **$3.20**. There is
-no monthly plan — it is per-second usage.
+**Fly требует карту.** Постоянный бесплатный тариф закончился в 2024 году; новому аккаунту дают
+пробу на два VM-часа или семь дней, что кончится раньше, дальше каждая машина платная. Одна
+круглосуточная `shared-cpu-1x` на 256 МБ — около **$1.94/мес**, на 512 МБ — около **$3.20**.
+Помесячных планов нет, тарификация посекундная.
 
-If that is not wanted yet, skip to steps 5 and 6: Vercel's free tier needs no card, so the public
-product can go up without the worker. The cost of deferring is precise — the free-tier demo only
-runs while a laptop is on, and the track record does not accumulate.
+Если платить пока не хочется — переходите к шагам 5 и 6: у Vercel бесплатный тариф без карты, и
+публичный продукт поднимется без воркера. Цена отсрочки точная: бесплатное демо работает только
+пока включён ноутбук, и трек-рекорд не копится.
 
-Install `flyctl` (PowerShell, once):
+Установка `flyctl` (PowerShell, один раз):
 
 ```powershell
 iwr https://fly.io/install.ps1 -useb | iex
 ```
 
-Then, **from the repository root** — the build context is the working directory:
+Дальше — **из корня репозитория**, потому что контекст сборки это рабочий каталог:
 
 ```bash
-fly auth signup      # or: fly auth login
+fly auth signup      # или: fly auth login
 fly launch --no-deploy --ha=false -c apps/agent/fly.testnet.toml
 ```
 
-`--ha=false` is not optional. Fly provisions **two** machines by default, and two workers tick the
-same agents concurrently: two screening charges against one balance, two racing trades out of one
-vault. There is no machine-count field in `fly.toml`, so the flag has to be on every `launch` and
-every `deploy`.
+`--ha=false` не опция, а обязательство. Fly по умолчанию поднимает **две** машины, а два воркера
+тикают одних и тех же агентов одновременно: два списания за скрининг с одного баланса и две гонки
+сделок из одного вольта. Поля с количеством машин в `fly.toml` нет, поэтому флаг нужен и на
+`launch`, и на каждом `deploy`.
 
-`fly launch` asks a few questions. Say **no** to a Postgres database and **no** to Redis — Neon is
-the database. Keep the app name `puno-worker-testnet` and accept the settings already in the file.
+`fly launch` задаст несколько вопросов. На Postgres — **нет**, на Redis — **нет**, база у нас Neon.
+Имя приложения оставьте `puno-worker-testnet` и примите настройки из файла.
 
-If `fly launch` fails with _"requested machine count exceeds organization limit"_, that is the
-billing gate rather than the machine count: an organization with no payment method on file has a
-limit of zero. `--ha=false` is still required, but it will not clear that error on its own.
+Если `fly launch` падает с _«requested machine count exceeds organization limit»_ — это шлюз
+оплаты, а не количество машин: у организации без привязанной карты лимит равен нулю. `--ha=false`
+всё равно нужен, но сам по себе эту ошибку не снимет.
 
-Now the secrets. `AGENT_PRIVATE_KEY` is the one that cannot be regenerated: every testnet vault is
-armed with a specific address, so the worker must hold that exact key. Take it from the
-`AGENT_PRIVATE_KEY` line of the local root `.env` — verified 2026-08-16 to derive to
-`0x389AA9c066854a1e1A62a9F49910760a8D010adD`, which is `NETWORKS.testnet.serviceAgent`.
+Теперь секреты. `AGENT_PRIVATE_KEY` — единственный, который нельзя сгенерировать заново: каждый
+тестнетовый вольт вооружён конкретным адресом, значит воркер обязан держать именно этот ключ.
+Берётся из строки `AGENT_PRIVATE_KEY` локального корневого `.env` — проверено 2026-08-16, что он
+выводится в `0x389AA9c066854a1e1A62a9F49910760a8D010adD`, то есть в `NETWORKS.testnet.serviceAgent`.
 
 ```bash
 fly secrets set -a puno-worker-testnet \
-  DATABASE_URL="<from step 1>" \
+  DATABASE_URL="<из шага 1>" \
   ANTHROPIC_API_KEY="<console.anthropic.com → API keys>" \
-  AGENT_PRIVATE_KEY="<AGENT_PRIVATE_KEY from the local .env>"
+  AGENT_PRIVATE_KEY="<AGENT_PRIVATE_KEY из локального .env>"
 ```
 
-Leave `CREDITS_WATCHER_START_BLOCK` unset. Unset means "start from the current head", which is
-right for a database that begins empty; setting it to the old testnet block would replay months of
-historical deposits into fresh accounts.
+`CREDITS_WATCHER_START_BLOCK` **не задавайте**. Пусто означает «с текущей головы цепи», что верно
+для базы, которая начинается пустой; записанный там старый тестнетовый блок переиграл бы месяцы
+исторических депозитов в несуществующие аккаунты.
 
 ```bash
 fly deploy --ha=false -c apps/agent/fly.testnet.toml
 fly logs -a puno-worker-testnet
 ```
 
-The log must contain `Signing as 0x389AA9c066854a1e1A62a9F49910760a8D010adD`. **Read that address
-character by character** — it is the clipboard rule, and a mismatch here is expensive: a worker
-with the wrong key screens, decides, bills the user, and only then reverts on chain.
+В логе загрузки три строки, каждая ловит свою ошибку:
 
-If the process refuses to boot with a service-agent mismatch, the wrong key was pasted. That
-refusal is the safeguard working.
+- `Signing as 0x389AA9c066854a1e1A62a9F49910760a8D010adD` — адрес, которым вооружены вольты.
+  **Сверьте посимвольно**: это правило буфера обмена, и ошибка здесь дорогая — воркер с чужим
+  ключом отсканирует, решит, **спишет с пользователя** и только потом откатится на цепочке с
+  «not authorized», по разу на агента за тик. При несовпадении процесс откажется стартовать, и
+  этот отказ — сработавшая защита.
+- `Deposit watcher enabled — PunoCredits at 0x…`, либо `idle`, если у сети нет биллингового
+  контракта.
+- `[rate]` — если такой строки нет вовсе, курс свежий. Предупреждение означает, что начисления
+  вот-вот встанут или уже встали.
 
-### Step 5 — the product app on Vercel
+**Одна машина, никогда две.** `tickAllAgents()` обходит всех живых агентов без лизы и блокировки.
+Не масштабируйте до 2, пока лиза не появится.
 
-1. Open <https://vercel.com>, sign up with GitHub, and grant access to `trappalfy/puno-agent`.
-2. **Add New → Project**, import that repository.
-3. **Root Directory**: click Edit, choose `apps/web`. In the same dialog turn **on** _Include
-   files outside the root directory_. Without it the build cannot see `@puno/shared` or the
-   lockfile, both of which live above `apps/web`.
-4. Leave Framework, Build and Install commands alone — `apps/web/vercel.json` sets them.
-5. **Environment Variables**, three of them, all for Production and Preview:
+### Шаг 5 — продуктовое приложение на Vercel
 
-   | Name             | Value                |
-   | ---------------- | -------------------- |
-   | `DATABASE_URL`   | the string from Neon |
-   | `SESSION_SECRET` | first value, step 2  |
-   | `ENCRYPTION_KEY` | second value, step 2 |
+1. Откройте <https://vercel.com>, войдите через GitHub и дайте доступ к `trappalfy/puno-agent`.
+2. **Add New → Project**, импортируйте этот репозиторий.
+3. **Root Directory**: нажмите Edit, выберите `apps/web`. В том же окне включите _Include files
+   outside the root directory_. Без этого сборка не увидит ни `@puno/shared`, ни лок-файл — они
+   лежат выше `apps/web`.
+4. Framework, Build и Install команды не трогайте: их задаёт `apps/web/vercel.json`.
+5. **Environment Variables**, три штуки, для Production и Preview:
 
-6. **Deploy**, then copy the resulting URL — something like `https://puno-web.vercel.app`. Step 5
-   needs it.
+   | Имя              | Значение         |
+   | ---------------- | ---------------- |
+   | `DATABASE_URL`   | строка из Neon   |
+   | `SESSION_SECRET` | первое из шага 2 |
+   | `ENCRYPTION_KEY` | второе из шага 2 |
 
-Nothing needs to be set for SIWE: the login message takes its domain from the request URL, so it
-follows whatever hostname the app is served on.
+6. **Deploy**, затем скопируйте полученный URL — вида `https://puno-web.vercel.app`. Он нужен на
+   шаге 6.
 
-### Step 6 — the landing page on Vercel
+Для входа по кошельку настраивать нечего: домен в подписываемое сообщение берётся из URL запроса,
+то есть следует за тем именем хоста, на котором приложение отдаётся.
 
-1. **Add New → Project**, and import **the same repository again**. Two projects from one repo is
-   the intended shape, not a mistake.
-2. **Root Directory**: `apps/site`. _Include files outside the root directory_ **on**, same reason.
-3. One environment variable:
+`@puno/shared` не собирается и не должен — `main` указывает на `./src/index.ts`. Next
+транспилирует его через `transpilePackages`, Vite умеет сам.
 
-   | Name           | Value                                  |
-   | -------------- | -------------------------------------- |
-   | `VITE_APP_URL` | the URL from step 5, no trailing slash |
+`@electric-sql/pglite` оставьте в devDependencies у `web` и `agent`. Он даёт тестам настоящую
+семантику Postgres, а без него `next build` падает на несовпадении branded-типов. Vercel ставит
+devDependencies при сборке, так что это работает как есть.
 
-   Vite bakes this at build time, so changing it later needs a redeploy. It is also where the
-   landing page fetches `/api/pricing` from — wrong, and prices silently fall back to dollars.
+### Шаг 6 — лендинг на Vercel
+
+1. **Add New → Project** и импортируйте **тот же репозиторий второй раз**. Два проекта из одного
+   репозитория — так и задумано, это не ошибка.
+2. **Root Directory**: `apps/site`. _Include files outside the root directory_ — тоже **включить**,
+   по той же причине.
+3. Одна переменная окружения:
+
+   | Имя            | Значение                         |
+   | -------------- | -------------------------------- |
+   | `VITE_APP_URL` | URL из шага 5, без слэша в конце |
+
+   Vite запекает её на сборке, поэтому изменение потом требует передеплоя. Отсюда же лендинг
+   запрашивает `/api/pricing` — ошибётесь, и цены тихо свалятся в доллары.
 
 4. **Deploy.**
 
-### Step 7 — check it worked
+### Шаг 7 — проверить, что получилось
 
-| Check                              | Where               | What wrong looks like                               |
-| ---------------------------------- | ------------------- | --------------------------------------------------- |
-| Prices show **PUNO**, not dollars  | the landing page    | dollars → `VITE_APP_URL` wrong, or the web app down |
-| `/demo` opens with no wallet       | `<web>/demo`        | a login prompt                                      |
-| Rate is being served               | `<web>/api/pricing` | `tokenPrice: null` → no rate in this database       |
-| Worker is signing as the right key | `fly logs`          | any other address                                   |
-| Worker restarts cleanly            | `fly apps restart`  | it does not come back                               |
+| Проверка                         | Где                 | Как выглядит поломка                            |
+| -------------------------------- | ------------------- | ----------------------------------------------- |
+| Цены в **PUNO**, не в долларах   | лендинг             | доллары → неверный `VITE_APP_URL` или веб лежит |
+| `/demo` открывается без кошелька | `<web>/demo`        | просит войти                                    |
+| Курс отдаётся                    | `<web>/api/pricing` | `tokenPrice: null` → в этой базе курса нет      |
+| Воркер подписывает верным ключом | `fly logs`          | любой другой адрес                              |
+| Воркер чисто перезапускается     | `fly apps restart`  | не поднимается обратно                          |
 
-`tokenPrice: null` here means step 3 was skipped or ran against the wrong database — the rate
-lives in Postgres, not in config. Re-run the `set-rate` line from step 3.
+`tokenPrice: null` означает, что шаг 3 пропущен или выполнен против не той базы: курс живёт в
+Postgres, а не в конфиге. Повторите строку `set-rate` из шага 3.
 
-### What is not needed yet
+Полная проверка, когда воркер поднят: депозит на тестнете проходит насквозь — депозит → индексатор
+→ леджер → `reconcile()`.
 
-Do **not** create the mainnet worker, and do not put mainnet keys anywhere. `NETWORKS.mainnet` has
-no `punoCredits`, so mainnet stays closed by construction — see `whyClosed()`. The second Fly app
-belongs to T-0.
+### Чего пока делать не нужно
 
-## Order
+**Не создавайте мейннет-воркер и не кладите мейннет-ключи никуда.** У `NETWORKS.mainnet` нет
+`punoCredits`, поэтому мейннет закрыт по построению — см. `whyClosed()`. Второе приложение на Fly
+относится к дню T-0.
 
-Databases before the things that read them, and the worker before the web app so the first
-deploy's failures land somewhere nobody is looking at.
+---
 
-### 1. Managed Postgres
+## Известные пробелы
 
-Neon or Supabase. Take the pooled connection string.
+**Нет health-эндпоинта.** Воркер ничего не обслуживает, поэтому Fly видит только, жив ли процесс —
+зависший, но не упавший воркер выглядит здоровым. Стоит сделать маленький HTTP-эндпоинт до того,
+как здесь появятся платящие пользователи; сейчас намеренно не сделан, потому что это новая
+поверхность у сервиса, у которого её нет вовсе.
 
-`CreditsDb` is driver-agnostic and the schema is plain Postgres, so nothing here is
-provider-specific. Keep the credential in the platform store from the moment it is issued.
+**Нет CI.** `pnpm -r typecheck && pnpm lint && pnpm test` и `forge test` запускаются руками. Пуш,
+который их ломает, всё равно задеплоится.
 
-### 2. Migrations
+**`tickAllAgents()` последователен** внутри одного окна `TICK_INTERVAL_MS`. При нынешнем числе
+агентов это нормально; при некотором N проход перестанет укладываться в собственный интервал. Не
+блокер запуска, но сломается это первым.
 
-Handled by the release step in `fly.testnet.toml`, which runs on its own machine before the new
-version takes traffic — a deploy whose migration fails does not half-replace a running worker.
-
-To run one by hand: `pnpm --filter @puno/agent db:migrate`. The script is `db:migrate`, not
-`migrate`. Thirteen tables when it is done.
-
-### 3. The worker — Fly
-
-```bash
-fly launch --no-deploy -c apps/agent/fly.testnet.toml
-fly secrets set DATABASE_URL=... ANTHROPIC_API_KEY=... AGENT_PRIVATE_KEY=... -a puno-worker-testnet
-fly deploy --ha=false -c apps/agent/fly.testnet.toml
-```
-
-Check the boot log for three lines that each catch a different mistake:
-
-- `Signing as 0x…` — the address vaults are armed with. It refuses to boot on a mismatch, because
-  a worker with the wrong key screens, decides, **bills the user**, and only then reverts on chain
-  with "not authorized", once per agent per tick.
-- `Deposit watcher enabled — PunoCredits at 0x…`, or `idle` if the network has no billing contract.
-- `[rate]` — nothing at all means the PUNO/USD rate is fresh. A warning means crediting is about
-  to stop, or already has.
-
-**One machine, never two.** `tickAllAgents()` walks every live agent with no lease or lock, so a
-second instance ticks the same agents concurrently: double screening charges against one balance,
-and two racing trades out of one vault. Do not scale this to 2 without adding a lease first.
-
-### 4. Web and site — Vercel
-
-Two projects from one repository. Per project, in the dashboard:
-
-| Setting                              | `apps/web` | `apps/site` |
-| ------------------------------------ | ---------- | ----------- |
-| Root Directory                       | `apps/web` | `apps/site` |
-| Include files outside root directory | **on**     | **on**      |
-
-That last one is not optional: both apps import `@puno/shared` from outside their own directory,
-and the lockfile lives at the repo root. The `vercel.json` in each app supplies the framework,
-install and build commands.
-
-`@puno/shared` has no build step and needs none — `main` points at `./src/index.ts`. Next
-transpiles it via `transpilePackages`, Vite handles it natively.
-
-Leave `@electric-sql/pglite` in the devDependencies of both `web` and `agent`. It backs the tests
-with real Postgres semantics, and removing it breaks `next build` with branded-type mismatches —
-Vercel installs devDependencies during a build, so this works as it stands.
-
-Set `VITE_APP_URL` on the site project to the product app's URL. Vite bakes it at build time, so
-changing it later needs a redeploy. It is also what `/api/pricing` is fetched from — get it wrong
-and the landing page silently falls back to quoting dollars.
-
-### 5. Verify
-
-- Both apps serve; `/demo` works with no session cookie.
-- `https://<site>/` shows prices in PUNO, not dollars. Dollars mean the cross-origin fetch to
-  `/api/pricing` failed — check `VITE_APP_URL` and the CORS header.
-- A deposit on testnet credits end to end: deposit → indexer → ledger → `reconcile()`.
-- Kill the worker machine and watch it come back. Restart is the only liveness signal there is.
-
-## Known gaps
-
-**No health endpoint.** The worker serves nothing, so Fly can only tell whether the process is
-alive — a wedged-but-running worker looks healthy. Worth a small HTTP endpoint before this carries
-paying users; deliberately not built now, since it is new surface for a service with none.
-
-**No CI.** `pnpm -r typecheck && pnpm lint && pnpm test` and `forge test` run by hand. A push that
-breaks them still deploys.
-
-**`tickAllAgents()` is sequential** inside one `TICK_INTERVAL_MS` window. Fine at today's count; at
-some N a pass outruns its own interval. Not a launch blocker, but the first thing that bends.
-
-**The mainnet worker does not exist yet.** It is a second Fly app with its own
-`fly.mainnet.toml`, its own `AGENT_PRIVATE_KEY` deriving to the mainnet `serviceAgent`, and
-`CREDITS_WATCHER_START_BLOCK` set to the `PunoCredits` deployment block. Both workers run at once
-and permanently — the free tier lives on testnet by product decision. Copying the testnet file is
-the wrong way to make it: `DRY_RUN = "false"` is stated there because that file is testnet-only.
+**Мейннет-воркера ещё нет.** Это второе приложение на Fly со своим `fly.mainnet.toml`, своим
+`AGENT_PRIVATE_KEY`, выводящимся в мейннетовый `serviceAgent`, и с
+`CREDITS_WATCHER_START_BLOCK`, равным блоку деплоя `PunoCredits`. Оба воркера работают
+одновременно и постоянно — бесплатный тариф живёт на тестнете по продуктовому решению. Копировать
+тестнетовый файл — неправильный способ его сделать: `DRY_RUN = "false"` написан там именно потому,
+что тот файл только для тестнета.
