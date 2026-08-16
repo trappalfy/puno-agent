@@ -601,22 +601,9 @@ necessarily contains an on-chain deploy. Target shape: verify the token → one 
 
 Four things must be built before that is true, none of which existed on 2026-08-16:
 
-- [ ] **Read `decimals()` off the token before the first deposit, and put it in `punoDecimals`.**
-      18 is the ask — it is the ERC-20 default, it is what every wallet and explorer assumes, and
-      it is what `config.ts` already says.
-
-      **Correction 2026-08-16:** this item used to say a token deployed with 9 decimals "becomes
-          code, at the worst possible moment". Checked, and that is no longer true — T1 threaded
-          `punoDecimals` through every PUNO conversion (`watcher.ts`, `claim`, `balance`, `pricing`,
-          `set-rate`, the top-up card). A non-18 token is survivable by editing one config field. The
-          remaining hardcoded 18s are the vault's USD convention (`maxNotionalPerTrade`, NAV,
-          `RiskLimitsPanel`) and have nothing to do with PUNO.
-
-          What is still dangerous is a **mismatch** between `punoDecimals` and the chain, in either
-          direction, because nothing else in the system would notice. Off by nine, every deposit is
-          credited a billion times wrong — silently, at the moment real money arrives. `preflight`
-          comparing config against `decimals()` is the whole control.
-
+- [ ] **Read `decimals()` off the token before the first deposit and put it in `punoDecimals`.**
+      18 is the ask, and it is what `config.ts` already says — see _Decimals_ below for what
+      actually breaks if it is not.
 - [x] **Split `DeployMainnet`. Done 2026-08-16.** It _always_ deployed `VaultFactory`, so a T-0
       run after an early factory deploy would have created a **second** factory at a fresh address
       while the first — already in `config.ts`, possibly already holding user vaults — stayed
@@ -632,6 +619,28 @@ Four things must be built before that is true, none of which existed on 2026-08-
       deployer, `VaultFactory.quoteToken()` == USDG, ETH balances for deployer and
       `serviceAgent`, rate freshness, `reconcile()`, and a machine check that no address equals
       the old deployer or the attacker's.
+
+#### Decimals
+
+`decimals` is metadata, not arithmetic. ERC-20 balances are integers with no fractional part;
+`decimals()` only says where a reader should put the point. At 18, one PUNO is stored as
+`1000000000000000000`. Our code multiplies and divides by `10 ** punoDecimals` to move between
+the two.
+
+18 is the ask because it is the ERC-20 default, it is what every wallet, explorer and DEX assumes,
+and it is what `config.ts` already carries.
+
+**Correction 2026-08-16:** this used to say a token deployed with 9 decimals "becomes code, at the
+worst possible moment". Checked, and no longer true. T1 threaded `punoDecimals` through every PUNO
+conversion — `watcher.ts`, `claim`, `balance`, `pricing`, `set-rate`, the top-up card — so a
+non-18 token costs one config field. The remaining hardcoded 18s are the vault's USD convention
+(`maxNotionalPerTrade`, NAV, `RiskLimitsPanel`) and have nothing to do with the token.
+
+What is dangerous is a **mismatch** between the config value and the chain, in either direction,
+because nothing else in the system would notice. Off by nine and every deposit is credited a
+billion times wrong — silently, at the moment real money starts arriving. `preflight` comparing
+the two is the whole control, which is a stronger argument for building `preflight` than the
+original wording was.
 
 #### The order on the day
 

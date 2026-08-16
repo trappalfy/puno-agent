@@ -251,6 +251,15 @@ owner-only" is the one claim this contract most needs to state without a caveat.
 a known gap: a deposit made after the high-water mark was initialised read as appreciation.
 Do not reintroduce it as a billing mechanism; if a profit fee ever returns it is a new design.
 
+**Prettier does not converge on multi-paragraph markdown list items.** A second paragraph
+indented under a `- [ ]` gets four more spaces on every `--write`, so `format:check` fails
+again immediately after `format` "fixed" it. Hit twice on `LAUNCH-CHECKLIST.md`. Keep list
+items to one paragraph and put the prose in a `####` section below — which reads better anyway,
+since a checklist item should be a line, not an essay.
+
+Related shell trap: `pnpm format:check 2>&1 | tail -2 && git commit` **always commits**, because
+the pipeline's exit status is `tail`'s. Check the gate in its own command.
+
 **TypeScript runs with `exactOptionalPropertyTypes: true`** — optional props must be typed
 `| undefined`. Also: `and()` returns `SQL | undefined`, which trips this; use `sql\`\`` directly.
 
