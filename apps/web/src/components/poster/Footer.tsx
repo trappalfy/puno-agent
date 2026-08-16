@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isOpenForBusiness, NETWORKS } from "@puno/shared";
 import { Divider } from "../ui/Divider";
 
 export function Footer() {
@@ -10,7 +11,14 @@ export function Footer() {
           <div className="text-subheading font-denim-ink font-semibold text-white">Puno</div>
           <p className="mt-[var(--spacing-16)] max-w-sm text-body-sm text-white">
             Non-custodial vaults. An agent that can propose trades within limits you set — never
-            withdraw. Testnet only until a separate, explicit mainnet launch.
+            withdraw.{" "}
+            {/* Was "Testnet only until a separate, explicit mainnet launch" —
+                true today, false the moment mainnet opens, and nothing would
+                have made it fail. The free tier's network is the durable fact
+                and stays true in both states. */}
+            {isOpenForBusiness(NETWORKS.mainnet)
+              ? "Free runs happen on testnet; your own vault trades on Robinhood Chain."
+              : "Testnet only until a separate, explicit mainnet launch."}
           </p>
         </div>
         <div className="flex gap-[var(--spacing-40)] text-body-sm text-white">

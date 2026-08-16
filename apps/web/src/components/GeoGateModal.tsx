@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isOpenForBusiness, NETWORKS } from "@puno/shared";
 import { Button } from "./ui/Button";
 
 const CONSENT_KEY = "puno_geo_consent_v1";
@@ -51,9 +52,16 @@ export function GeoGateModal() {
             </li>
           ))}
         </ul>
+        {/* Derived, never written by hand. This is a risk disclosure inside a
+            consent dialog: the moment mainnet opens, "no real funds are at
+            risk" stops being a stale label and becomes a materially false
+            statement made to someone at the instant they accept. Reading the
+            same predicate the wizard's gate reads means it cannot be left
+            behind by a deploy. */}
         <p className="mt-[var(--spacing-16)] text-app-body-sm text-white-muted">
-          Puno is presently testnet-only — no real funds are at risk — but this restriction still
-          applies to who may use the product.
+          {isOpenForBusiness(NETWORKS.mainnet)
+            ? "Puno executes real trades with real funds on Robinhood Chain. This restriction is about who may use the product."
+            : "Puno is presently testnet-only — no real funds are at risk — but this restriction still applies to who may use the product."}
         </p>
         <label className="mt-[var(--spacing-24)] flex items-start gap-[var(--spacing-12)] text-app-body-sm text-white">
           <input
