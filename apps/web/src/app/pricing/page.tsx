@@ -62,25 +62,35 @@ export default function PricingPage() {
                         {row.blurb}
                       </p>
                     </div>
+                    {/* PUNO is the price, not a conversion shown beside one.
+                        The dollar figure used to be the headline with PUNO in
+                        faint text underneath; that had it backwards for a
+                        product you can only pay for in PUNO. USD appears only
+                        when there is no rate to quote — a number the user
+                        cannot act on beats no number at all. */}
                     <div className="shrink-0 text-left sm:text-right">
                       <div className="text-subheading font-jetbrains-mono tabular-nums text-lime-phosphor">
-                        ${pricesUsd[row.key].toFixed(2)}
-                      </div>
-                      <div className="text-num-xs font-jetbrains-mono tabular-nums text-white-faint">
                         {data?.pricesTokens
-                          ? `${formatTokens(data.pricesTokens[row.key], 2, data.contracts.punoDecimals)} PUNO`
-                          : rate === null
-                            ? "PUNO rate pending"
-                            : "—"}
+                          ? `${formatTokens(data.pricesTokens[row.key], 0, data.contracts.punoDecimals)} PUNO`
+                          : `$${pricesUsd[row.key].toFixed(2)}`}
                       </div>
+                      {!data?.pricesTokens && (
+                        <div className="text-num-xs font-jetbrains-mono tabular-nums text-white-faint">
+                          {rate === null ? "PUNO rate pending" : "—"}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
 
+              {/* Says the PUNO figures move without leading with dollars. The
+                  sentence has to exist: a price quoted in PUNO will visibly
+                  change on its own, and "the price went up" is the wrong thing
+                  for someone to conclude when the cost of the work held still. */}
               <p className="mt-[var(--spacing-24)] text-body-sm text-white-muted">
-                Prices are set in dollars and converted to PUNO at the current rate, so what an
-                action costs you doesn&rsquo;t swing with the token.{" "}
+                These amounts follow the market — they move as PUNO moves, so the work an action
+                buys stays the same.{" "}
                 {data?.usesOwnKey
                   ? "Your own Anthropic key is set, so thinking is free — you're only billed for executed trades."
                   : "Bring your own Anthropic key and the first two lines drop to zero."}
@@ -91,14 +101,22 @@ export default function PricingPage() {
           <div className="flex flex-col gap-[var(--spacing-16)]">
             {data && (
               <Card>
+                {/* Decisions, not PUNO. Prices are quoted in PUNO because a
+                    price list is a menu and a menu may re-price; a balance is a
+                    stored amount, and rendering it in PUNO would make it fall
+                    every time the token rose — hitting hardest exactly the
+                    people most invested in it rising. Decisions is the unit
+                    that only changes when the agent has done something. */}
                 <div className="text-num-xs uppercase text-white-faint font-jetbrains-mono">
                   Your balance
                 </div>
                 <div className="mt-[var(--spacing-8)] text-subheading font-jetbrains-mono tabular-nums text-white">
-                  ${data.balanceUsd.toFixed(2)}
+                  {data.decisionsRemaining} decision{data.decisionsRemaining === 1 ? "" : "s"}
                 </div>
                 <div className="mt-[var(--spacing-4)] text-num-xs text-white-faint font-jetbrains-mono">
-                  ≈ {data.decisionsRemaining} decisions
+                  {data.balanceUsd > 0 && data.decisionsRemaining === 0
+                    ? "not enough for a full decision"
+                    : "topped up in PUNO, spent per action"}
                 </div>
               </Card>
             )}

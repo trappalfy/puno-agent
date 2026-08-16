@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
+import { formatTokens as sharedFormatTokens } from "@puno/shared";
 import { fetchJson, retryUnlessDenied } from "./fetchJson";
 
 export type BillableEventKey = "screen" | "decision" | "trade";
@@ -69,24 +70,14 @@ export function useBalance() {
   });
 }
 
-/// Formats a raw token amount for display, without pulling in a bignum
-/// library: whole tokens plus at most `maxFractionDigits`.
+/// Adapter over the shared formatter: the API sends raw amounts as strings
+/// (bigints don't survive JSON) and null when there is no rate, so every call
+/// site here would otherwise repeat the same two checks.
 ///
-/// `decimals` is a parameter rather than a baked-in 18 because this was the
-/// fifth and last place the token's scale was hardcoded. It defaults to 18 so
-/// callers that genuinely cannot know it still render, but every caller here
-/// passes the network's own `punoDecimals`.
+/// The formatting itself moved to `@puno/shared` when the marketing site
+/// started quoting PUNO too — one implementation, so two pages describing the
+/// same price cannot render it differently.
 export function formatTokens(raw: string | null, maxFractionDigits = 2, decimals = 18): string {
   if (raw === null) return "—";
-  const value = BigInt(raw);
-  const scale = 10n ** BigInt(decimals);
-  const whole = value / scale;
-  const frac = value % scale;
-  if (frac === 0n || maxFractionDigits === 0) return whole.toLocaleString("en-US");
-  const fracStr = frac
-    .toString()
-    .padStart(decimals, "0")
-    .slice(0, maxFractionDigits)
-    .replace(/0+$/, "");
-  return fracStr ? `${whole.toLocaleString("en-US")}.${fracStr}` : whole.toLocaleString("en-US");
+  return sharedFormatTokens(BigInt(raw), decimals, maxFractionDigits);
 }

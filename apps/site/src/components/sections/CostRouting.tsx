@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { PRICES_USD } from "@puno/shared";
 import { SectionEyebrow } from "../primitives/SectionEyebrow";
 import { COST_TIERS } from "../../lib/copy";
+import { usePricing, priceLabel } from "../../lib/usePricing";
 
 const CHIPS = [
   "Deterministic checks first",
@@ -11,6 +12,8 @@ const CHIPS = [
 ];
 
 export function CostRouting() {
+  const pricing = usePricing();
+
   return (
     <section className="relative z-10 max-w-6xl mx-auto px-6 py-20 md:py-28 grid md:grid-cols-2 gap-10 md:gap-16 items-start">
       <motion.div
@@ -55,7 +58,7 @@ export function CostRouting() {
             illustrative. There is no public tick feed to source it from yet, so
             the header says what the panel actually is. */}
         <div className="text-xs text-white/50 font-jetbrains-mono">
-          Per action · priced in USD, paid in PUNO
+          Per action · priced and paid in PUNO
         </div>
         <div className="mt-4 flex flex-col gap-3">
           {COST_TIERS.map((tier) => (
@@ -67,7 +70,12 @@ export function CostRouting() {
                     tier.lime ? "text-lime-phosphor" : "text-white"
                   }`}
                 >
-                  {tier.key === null ? "$0" : `$${PRICES_USD[tier.key].toFixed(2)}`}
+                  {/* "0 PUNO", not "$0" — the free tier is the row this panel
+                      exists to sell, and it should be free in the same unit
+                      everything else is priced in. */}
+                  {tier.key === null
+                    ? "0 PUNO"
+                    : priceLabel(pricing, tier.key, PRICES_USD[tier.key])}
                 </span>
               </div>
               <p className="mt-1.5 text-xs text-white/50 leading-[1.4]">{tier.body}</p>

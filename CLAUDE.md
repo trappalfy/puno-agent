@@ -44,8 +44,35 @@ MIN_DEPOSIT_USD = 5.0;
 LOW_BALANCE_WARNING_USD = 1.0;
 ```
 
-The user sees prices **in PUNO**; conversion happens **server-side only**. There is no
-on-chain oracle for PUNO/USD and there must not be one for now.
+The user sees prices **in PUNO** — everywhere, including the marketing site (decided
+2026-08-16). Conversion happens **server-side only**. There is no on-chain oracle for
+PUNO/USD and there must not be one for now.
+
+**Three units, and they are not interchangeable:**
+
+| Shown as      | What                                   | Why                                                                   |
+| ------------- | -------------------------------------- | --------------------------------------------------------------------- |
+| **PUNO**      | what an action costs, what to deposit  | the only way to pay; a price list is a menu and may re-price          |
+| **decisions** | the user's credit balance              | a stored amount must not fall when the token rises                    |
+| **USD**       | vault NAV, positions, P&L, risk limits | the vault holds USDG and equities, no PUNO; limits go on-chain in USD |
+
+The balance is **not** shown in PUNO, and this is deliberate. Deposit 50,000 PUNO at $0.0004,
+PUNO doubles, and a PUNO-denominated balance reads 25,000 — same value, same number of
+decisions, but it looks like half the money was taken, and it hits hardest exactly the people
+most invested in PUNO rising. `decisionsRemaining` only moves when the agent has done
+something. Same argument as the USD-denominated ledger below, seen from the user's side.
+
+`GET /api/pricing` is public and unauthenticated — `apps/site` is a static Vite build on a
+separate origin with no session and no database, and the rate lives in Postgres. Baking a rate
+into that build would be a second copy of the one number the whole billing path turns on. The
+route carries no per-account data and does not apply the BYOK discount, which is a property of
+an account. Both site sections fall back to USD when the fetch fails or no rate is set: a
+price a visitor cannot pay in still beats a blank.
+
+**Quoting in PUNO makes numbers long.** `$50` became `125,000 PUNO`, which is why
+`formatTokensCompact` exists and why the top-up chips and pay button use it — three of those
+side by side is the button overflow this UI was already fixed for once. The exact figure stays
+on the "You send" row, which has a line to itself.
 
 **Why the balance is denominated in USD, not tokens:** the token funds the account and is
 converted to USD credits at deposit time. If balances were held in tokens, a price drop

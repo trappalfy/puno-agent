@@ -7,6 +7,7 @@ import {
   erc20Abi,
   punoCreditsAbi,
   usdToTokens,
+  formatTokensCompact,
   creditsNetwork,
   TOP_UP_PRESETS_USD,
 } from "@puno/shared";
@@ -67,6 +68,15 @@ export function TopUpCard() {
   // it was "derived from the same helper the API uses"; it was not.
   const amountRaw =
     rate && rate > 0 && !rateTooStaleToCharge ? usdToTokens(selectedUsd, rate, decimals) : null;
+
+  /// A preset's PUNO amount, shortened for the chip. Null when there is no
+  /// usable rate, in which case the chips fall back to dollars — a preset the
+  /// user cannot read is worse than one in the wrong unit, and the pay button
+  /// is already disabled in that state.
+  const presetTokens = (usd: number): string | null =>
+    rate && rate > 0 && !rateTooStaleToCharge
+      ? formatTokensCompact(usdToTokens(usd, rate, decimals), decimals)
+      : null;
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: punoToken,
@@ -143,7 +153,12 @@ export function TopUpCard() {
                 : "border-white/25 text-white-muted hover:border-white/50"
             }`}
           >
-            ${usd}
+            {/* Compact, because quoting in PUNO made these long in a way
+                dollars never were: "$50" became "125,000" at the launch rate,
+                and three of those side by side is the button overflow this UI
+                was already fixed for once. The exact figure is on the "You
+                send" row below, which has a whole line to itself. */}
+            {presetTokens(usd) ?? `$${usd}`}
           </button>
         ))}
       </div>
@@ -249,13 +264,20 @@ export function TopUpCard() {
               );
             }}
           >
+            {/* Both labels named dollars for an amount the wallet will prompt
+                for in PUNO — "Approve 5 USD of PUNO" asked the user to
+                reconcile two units mid-transaction. Compact, because the
+                button is one line and 125,000 is not the part that needs to
+                be exact here; the full figure is on the "You send" row. */}
             {busy
               ? "Confirming…"
               : insufficientTokens
                 ? "Not enough PUNO"
-                : needsApproval
-                  ? `Approve ${selectedUsd} USD of PUNO`
-                  : `Pay $${selectedUsd}`}
+                : amountRaw === null
+                  ? "Rate unavailable"
+                  : needsApproval
+                    ? `Approve ${formatTokensCompact(amountRaw, decimals)} PUNO`
+                    : `Pay ${formatTokensCompact(amountRaw, decimals)} PUNO`}
           </Button>
         </RequireNetwork>
       </div>

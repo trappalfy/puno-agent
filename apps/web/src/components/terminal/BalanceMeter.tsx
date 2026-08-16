@@ -33,19 +33,31 @@ export function BalanceMeter() {
       ? "text-signal-amber"
       : "text-lime-phosphor";
 
+  // The headline is decisions, which is what the module comment above always
+  // said it should be — the dollar figure was sitting in that slot and pushing
+  // the real answer into faint text underneath.
+  //
+  // Not PUNO, even though every price in the product is now quoted in PUNO. A
+  // price is a menu and may re-price; a balance is a stored amount, and in PUNO
+  // it would drop every time the token rose, with nothing spent. Decisions moves
+  // only when the agent has done something.
   return (
     <Card className={empty ? "border border-signal-red" : ""}>
       <div className="flex items-center justify-between">
         <span className="text-num-xs uppercase text-white-faint font-jetbrains-mono">Credit</span>
         <span className={`text-num-sm font-jetbrains-mono tabular-nums ${amountColor}`}>
-          ${balanceUsd.toFixed(2)}
+          {usesOwnKey && decisionsRemaining === 0
+            ? "own key"
+            : `${decisionsRemaining} decision${decisionsRemaining === 1 ? "" : "s"}`}
         </span>
       </div>
 
       <p className="mt-[var(--spacing-8)] text-num-xs text-white-faint font-jetbrains-mono tabular-nums">
         {usesOwnKey
           ? `own key — ${decisionsRemaining > 0 ? "trades only" : "trades billed"}`
-          : `≈ ${decisionsRemaining} decision${decisionsRemaining === 1 ? "" : "s"}`}
+          : empty
+            ? "top up to keep deciding"
+            : "paid in PUNO, spent per action"}
       </p>
 
       {empty && (

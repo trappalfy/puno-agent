@@ -51,6 +51,7 @@ export const MIN_DEPOSIT_USD = 5.0;
 /// because `set-rate` previews what a proposed rate turns them into, and a
 /// preview of amounts the user is never offered would be answering a different
 /// question than the one being decided.
+///
 /// `readonly number[]` rather than `as const`: the literal types `as const`
 /// produces narrow `useState(PRESETS[0])` to `useState<5>`, so selecting any
 /// other preset stops typechecking. These are amounts, not a closed set of tags.
@@ -84,6 +85,47 @@ export function tokensToUsd(rawAmount: bigint, tokenUsdPrice: number, decimals: 
   if (rawAmount <= 0n) return 0;
   const micros = (rawAmount * MICRO) / 10n ** BigInt(decimals);
   return (Number(micros) / 1e6) * tokenUsdPrice;
+}
+
+/// Raw on-chain token amount -> a string for a person to read.
+///
+/// Lives here rather than in either app because prices are now quoted in PUNO
+/// on the marketing site as well as in the product, and two formatters would
+/// eventually disagree about the same number on two pages describing the same
+/// price.
+///
+/// Deliberately not `Intl.NumberFormat` on a divided float: a raw 18-decimal
+/// amount exceeds `Number.MAX_SAFE_INTEGER` at about 0.01 tokens, so the whole
+/// part is taken in bigint and only the small fraction becomes a Number.
+export function formatTokens(raw: bigint, decimals: number, maxFractionDigits = 0): string {
+  const scale = 10n ** BigInt(decimals);
+  const whole = raw / scale;
+  const frac = raw % scale;
+  const wholeStr = whole.toLocaleString("en-US");
+  if (frac === 0n || maxFractionDigits === 0) return wholeStr;
+  const fracStr = frac
+    .toString()
+    .padStart(decimals, "0")
+    .slice(0, maxFractionDigits)
+    .replace(/0+$/, "");
+  return fracStr ? `${wholeStr}.${fracStr}` : wholeStr;
+}
+
+/// Same amount, shortened, for places where the full figure will not fit.
+///
+/// Needed because quoting in PUNO makes the numbers long in a way dollars never
+/// were: a $50 top-up is "125,000 PUNO" at the launch rate, and three of those
+/// side by side is exactly the button-overflow this UI was already fixed for
+/// once. The exact amount is always shown somewhere less cramped.
+export function formatTokensCompact(raw: bigint, decimals: number): string {
+  const whole = raw / 10n ** BigInt(decimals);
+  if (whole >= 1_000_000n) return `${trimZeros(Number(whole / 1_000n) / 1_000)}M`;
+  if (whole >= 10_000n) return `${trimZeros(Number(whole) / 1_000)}K`;
+  return whole.toLocaleString("en-US");
+}
+
+function trimZeros(n: number): string {
+  return n.toFixed(1).replace(/\.0$/, "");
 }
 
 /// USD -> raw on-chain token amount, at `tokenUsdPrice`.

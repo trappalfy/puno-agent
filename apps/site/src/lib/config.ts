@@ -16,4 +16,9 @@ export const links = {
   createAgent: `${APP_URL}/app/agents/new`,
   dashboard: `${APP_URL}/app`,
   pricing: `${APP_URL}/pricing`,
+  // Public, unauthenticated. This page quotes prices in PUNO, and the PUNO/USD
+  // rate lives in the product's database rather than in config — baking a rate
+  // into this build would put a second copy of the number the whole billing
+  // path turns on into a place that only changes when someone redeploys.
+  pricingApi: `${APP_URL}/api/pricing`,
 } as const;
