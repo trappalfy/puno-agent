@@ -134,11 +134,17 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 так что сначала присвоение:
 
 ```powershell
+cd C:\Users\chaiz\Desktop\puno-agent-main
 $env:DATABASE_URL = "<строка из Neon>"
 pnpm.cmd --filter @puno/agent db:migrate
 pnpm.cmd --filter @puno/agent set-rate -- 0.000001 --note "testnet launch"
 Remove-Item Env:\DATABASE_URL
 ```
+
+Первая строка обязательна, и это не педантизм: PowerShell открывается в домашнем каталоге, а
+`--filter` разрешается только изнутри воркспейса. Из `C:\Users\<вы>` команда падает на
+`ERR_PNPM_NO_PKG_MANIFEST` — pnpm не видит ни `package.json`, ни, соответственно, скрипт.
+Отдельный `pnpm install` не нужен: зависимости уже установлены в дереве проекта.
 
 **`pnpm.cmd`, а не `pnpm` — не опечатка.** На свежей Windows политика выполнения сценариев по
 умолчанию `Restricted`, и обёртка `pnpm.ps1` из глобального npm-каталога не запускается:
