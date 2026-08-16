@@ -106,7 +106,7 @@ once, from this laptop. PowerShell has no inline environment prefix, so set the 
 ```powershell
 $env:DATABASE_URL = "<the Neon string>"
 pnpm --filter @puno/agent db:migrate
-pnpm --filter @puno/agent set-rate -- 0.0004 --note "testnet launch"
+pnpm --filter @puno/agent set-rate -- 0.000001 --note "testnet launch"
 Remove-Item Env:\DATABASE_URL
 ```
 

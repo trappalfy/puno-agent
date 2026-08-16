@@ -55,7 +55,12 @@ describe("usdToTokens", () => {
   it("never quotes less than the requested value", () => {
     // A price that does not divide evenly is where truncation would bite: the
     // quote must cover the dollar amount, not fall a wei short of it.
-    for (const price of [0.003, 0.0007, 1 / 3, 7.77]) {
+    //
+    // The small end matters more than it looks. `usdToTokens` computes
+    // `(usd / price) * 1e6` as a float before reaching bigint, and that product
+    // passes Number.MAX_SAFE_INTEGER at around price 5e-9 for a $50 top-up — so
+    // these cases sit deliberately either side of the working rate.
+    for (const price of [0.003, 0.0007, 1 / 3, 7.77, 1e-6, 3.7e-7, 1e-8]) {
       for (const usd of [MIN_DEPOSIT_USD, 29, 0.5, 123.45]) {
         const raw = usdToTokens(usd, price, 18);
         assert.ok(
@@ -141,5 +146,15 @@ describe("formatTokensCompact", () => {
   it("goes to millions rather than printing five digits of thousands", () => {
     assert.equal(formatTokensCompact(raw(2_000_000), 18), "2M");
     assert.equal(formatTokensCompact(raw(1_250_000), 18), "1.3M");
+  });
+
+  it("stays legible at the working rate, where a top-up runs to eight digits", () => {
+    // At $0.000001 the whole price table is 10K / 500K / 250K / 5M / 20M / 50M.
+    // This is the case the compact form exists for: "50,000,000 PUNO" in a chip
+    // is the button overflow this UI was fixed for once already.
+    assert.equal(formatTokensCompact(raw(10_000), 18), "10K");
+    assert.equal(formatTokensCompact(raw(500_000), 18), "500K");
+    assert.equal(formatTokensCompact(raw(5_000_000), 18), "5M");
+    assert.equal(formatTokensCompact(raw(50_000_000), 18), "50M");
   });
 });
