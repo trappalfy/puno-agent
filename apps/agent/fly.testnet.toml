@@ -53,14 +53,20 @@ TESTNET_PRICE_KEEPER = "true"
 #
 # **This block does not enforce that.** Fly provisions two machines by default
 # for availability, and there is no machine-count field in fly.toml — it is a
-# deploy-time flag. Every launch and every deploy must carry `--ha=false`:
+# deploy-time flag. Every deploy must carry `--ha=false`:
 #
-#   fly launch --no-deploy --ha=false -c apps/agent/fly.testnet.toml
+#   fly apps create puno-worker-testnet          # once, and it touches nothing here
 #   fly deploy --ha=false -c apps/agent/fly.testnet.toml
 #
 # For a stateless web service the default is a good one. For this worker it is
 # a correctness bug that bills users twice, which is why it is written here
 # rather than left to whoever reads the Fly docs.
+#
+# **Do not create the app with `fly launch`.** It treats this file as its own
+# output: run once on 2026-08-17 it rewrote `app` to a generated name and
+# deleted every comment here, including the paragraph above — the one thing in
+# this file that cannot be recovered by reading the settings. `apps create`
+# does not write a fly.toml at all.
 [[vm]]
 size = "shared-cpu-1x"
 memory = "512mb"
