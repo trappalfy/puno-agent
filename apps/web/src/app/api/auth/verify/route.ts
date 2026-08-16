@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyMessage } from "viem";
-import { buildSiweMessage, isFreshIssuedAt, getNetwork } from "@puno/shared";
+import { buildSiweMessage, isFreshIssuedAt } from "@puno/shared";
 import {
   NONCE_COOKIE,
   SESSION_COOKIE,
@@ -8,25 +8,35 @@ import {
   sessionCookieOptions,
 } from "@/lib/session";
 import { getOrCreateAccountByWallet } from "@/lib/account";
+import { resolveSiweChainId } from "@/lib/siweChain";
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
-const network = getNetwork("testnet"); // testnet-only until a separate mainnet decision
 
 /**
  * Verifies an EIP-4361 signature and, on success, issues the session cookie
  * that every other route now reads identity from.
  *
  * The message is rebuilt here from values the server already trusts — its own
- * origin, its own chain id, and the nonce it put in the cookie — rather than
- * parsed out of anything the client sent. Only the address and issuedAt come
- * from the request, and both are folded into the string the signature has to
- * match, so a mismatch in either simply fails verification.
+ * origin and the nonce it put in the cookie — rather than parsed out of anything
+ * the client sent. Address, issuedAt and chainId come from the request, and all
+ * three are folded into the string the signature has to match, so a mismatch in
+ * any of them simply fails verification.
+ *
+ * `chainId` moved from server-fixed to client-supplied deliberately. It was
+ * pinned to testnet, which meant a wallet on mainnet signed a message this route
+ * would never reconstruct — sign-in failed with "signature did not match" for a
+ * user doing exactly what the product asks. Accepting either of our chains
+ * widens the accepted-message set from one string to two and weakens nothing:
+ * `domain` and `uri` still come from the request URL, the nonce is still the
+ * single-use one from an httpOnly cookie, and the address is still the recovery
+ * target. See lib/siweChain.ts for why the *type* check matters.
  */
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     address?: string;
     signature?: string;
     issuedAt?: string;
+    chainId?: unknown;
   } | null;
 
   const address = body?.address;
@@ -41,6 +51,11 @@ export async function POST(request: Request) {
   }
   if (!isFreshIssuedAt(issuedAt)) {
     return NextResponse.json({ error: "sign-in request expired — try again" }, { status: 400 });
+  }
+
+  const chainId = resolveSiweChainId(body?.chainId);
+  if (chainId === null) {
+    return NextResponse.json({ error: "sign-in must be from a chain Puno runs" }, { status: 400 });
   }
 
   const nonce = request.headers
@@ -62,7 +77,7 @@ export async function POST(request: Request) {
     domain: url.host,
     address,
     uri: url.origin,
-    chainId: network.chainId,
+    chainId,
     nonce,
     issuedAt,
   });

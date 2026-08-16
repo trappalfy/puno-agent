@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
-import { buildSiweMessage, getNetwork } from "@puno/shared";
-
-const network = getNetwork("testnet"); // testnet-only until a separate mainnet decision
+import { buildSiweMessage } from "@puno/shared";
+import { siweChainIdForWallet } from "./siweChain";
 
 export type SessionState = "loading" | "signed-out" | "signed-in";
 
@@ -21,7 +20,7 @@ export type SessionState = "loading" | "signed-out" | "signed-in";
  * signed message says so, since that is the only thing the user sees.
  */
 export function useSession() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId: walletChainId } = useAccount();
   const { signMessageAsync } = useSignMessage();
 
   const [state, setState] = useState<SessionState>("loading");
@@ -63,11 +62,18 @@ export function useSession() {
       const { nonce } = (await nonceRes.json()) as { nonce: string };
 
       const issuedAt = new Date().toISOString();
+      // The wallet's own chain, not a compiled-in one. This used to be pinned to
+      // testnet, so a wallet on mainnet signed a message the server would never
+      // rebuild and sign-in simply failed — which is the middle of the journey
+      // the product is built around: free run on testnet, paid vault on mainnet.
+      // The session itself stays chain-agnostic (the cookie holds an address and
+      // nothing else), so crossing networks never needs a second signature.
+      const chainId = siweChainIdForWallet(walletChainId);
       const message = buildSiweMessage({
         domain: window.location.host,
         address,
         uri: window.location.origin,
-        chainId: network.chainId,
+        chainId,
         nonce,
         issuedAt,
       });
@@ -77,7 +83,7 @@ export function useSession() {
       const verifyRes = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ address, signature, issuedAt }),
+        body: JSON.stringify({ address, signature, issuedAt, chainId }),
       });
       if (!verifyRes.ok) {
         const json = (await verifyRes.json().catch(() => ({}))) as { error?: string };
@@ -92,7 +98,7 @@ export function useSession() {
     } finally {
       setPending(false);
     }
-  }, [address, signMessageAsync, refresh]);
+  }, [address, walletChainId, signMessageAsync, refresh]);
 
   const signOut = useCallback(async () => {
     await fetch("/api/auth/session", { method: "DELETE" });
