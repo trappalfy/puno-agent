@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
-import { erc20Abi, punoCreditsAbi } from "@puno/shared";
+import { erc20Abi, punoCreditsAbi, usdToTokens } from "@puno/shared";
 import type { Address } from "viem";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -24,19 +24,31 @@ export function TopUpCard() {
 
   const punoToken = balance?.contracts.punoToken as Address | undefined;
   const punoCredits = balance?.contracts.punoCredits as Address | undefined;
-  const configured = !!punoToken && !!punoCredits;
+  // The chain those addresses live on. Every read and write below is pinned to
+  // it rather than inheriting the wallet's chain: an `approve` sent to the other
+  // network hits an address with no code, which **succeeds silently** and spends
+  // the gas, and at a colliding address (same deployer, same nonce, different
+  // chain — the collision this repo already documents) the selector lands on
+  // some other contract entirely.
+  const chainId = balance?.contracts.chainId ?? undefined;
+  const configured = !!punoToken && !!punoCredits && chainId !== undefined;
   const rate = balance?.tokenPrice?.priceUsd ?? null;
+  const decimals = balance?.contracts.punoDecimals ?? 18;
 
-  // Derived from the same USD→token helper the API uses, so what the button
-  // sends always matches what the page quoted.
-  const amountRaw =
-    rate && rate > 0 ? BigInt(Math.ceil((selectedUsd / rate) * 1e6)) * 10n ** 12n : null;
+  // The shared helper, not a copy of it. This used to be an inline
+  // `BigInt(Math.ceil((usd / rate) * 1e6)) * 10n ** 12n`, which hardcoded 18
+  // decimals and dropped the round-up correction `usdToTokens` applies on its
+  // last line — so the card could quote a hair under the minimum and the deposit
+  // would revert with "below minimum" on the final wei. The comment here claimed
+  // it was "derived from the same helper the API uses"; it was not.
+  const amountRaw = rate && rate > 0 ? usdToTokens(selectedUsd, rate, decimals) : null;
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: punoToken,
     abi: erc20Abi,
     functionName: "allowance",
     args: address && punoCredits ? [address, punoCredits] : undefined,
+    chainId,
     query: { enabled: configured && !!address },
   });
 
@@ -45,12 +57,14 @@ export function TopUpCard() {
     abi: erc20Abi,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
+    chainId,
     query: { enabled: configured && !!address },
   });
 
   const { writeContract, data: txHash, isPending, reset } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({
     hash: txHash,
+    chainId,
     query: { enabled: !!txHash },
   });
 
@@ -113,7 +127,7 @@ export function TopUpCard() {
         <span className="text-app-body-sm text-white-muted">You send</span>
         <span className="text-num-sm text-white font-jetbrains-mono tabular-nums">
           {amountRaw !== null
-            ? `${formatTokens(amountRaw.toString(), 4)} PUNO`
+            ? `${formatTokens(amountRaw.toString(), 4, decimals)} PUNO`
             : "rate unavailable"}
         </span>
       </div>
@@ -121,7 +135,7 @@ export function TopUpCard() {
         <div className="mt-[var(--spacing-4)] flex items-baseline justify-between">
           <span className="text-num-xs text-white-faint font-jetbrains-mono">Wallet</span>
           <span className="text-num-xs text-white-faint font-jetbrains-mono tabular-nums">
-            {formatTokens((tokenBalance as bigint).toString(), 2)} PUNO
+            {formatTokens((tokenBalance as bigint).toString(), 2, decimals)} PUNO
           </span>
         </div>
       )}
@@ -141,6 +155,7 @@ export function TopUpCard() {
                 abi: erc20Abi,
                 functionName: "approve",
                 args: [punoCredits, amountRaw],
+                chainId,
               },
               {
                 onSuccess: () => {
@@ -160,6 +175,7 @@ export function TopUpCard() {
               abi: punoCreditsAbi,
               functionName: "deposit",
               args: [amountRaw],
+              chainId,
             },
             {
               onSuccess: async (hash) => {

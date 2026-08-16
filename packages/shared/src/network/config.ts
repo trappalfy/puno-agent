@@ -47,6 +47,18 @@ export interface NetworkConfig {
   // — every billing path checks for null and says so rather than half-working.
   punoToken: Address | null;
   punoCredits: Address | null;
+  /// Decimals of `punoToken`. Recorded rather than read from the chain, because
+  /// every money conversion needs it synchronously and an RPC hiccup must not
+  /// turn into a mis-priced credit.
+  ///
+  /// It was hardcoded as a literal `18` in five separate places — the deposit
+  /// indexer, both billing routes, the top-up card and the balance formatter —
+  /// and nothing anywhere called `decimals()`. A token launched with 9 or 6
+  /// would have credited every depositor off by orders of magnitude, silently,
+  /// in the direction of giving away service. One field so the five cannot
+  /// disagree, and `preflight` asserts it against the deployed token's own
+  /// `decimals()` before mainnet opens.
+  punoDecimals: number;
   // The vault the free tier runs against, read-only. A free run is a paper
   // run — it reads this vault's real portfolio and prices, screens, decides,
   // assesses risk and simulates against it, and never broadcasts. Sharing one
@@ -117,6 +129,10 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     vaultFactory: null,
     punoToken: null,
     punoCredits: null,
+    // The value the product is built around, and therefore a *requirement* on
+    // the token rather than an observation of it — PUNO must launch with 18.
+    // Verified against the deployed token by `preflight` before mainnet opens.
+    punoDecimals: 18,
     // Deliberately null. The free tier is a testnet demonstration; running it
     // against a mainnet vault would spend real gas on simulations for people
     // who have not paid for anything.
@@ -170,6 +186,9 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     vaultFactory: "0x486901cBa710C5Fb1032AB1bB25d190E3f845998",
     punoToken: "0x1A480B089d8A5E2B77A1bD8908aBFF9bB6af21da",
     punoCredits: "0xD0D4B491D8980cd49b0eCf151ad30f8f779D74f6",
+    // DeployTestnet stands the mock up as MockStockToken("Mock Puno Token",
+    // "PUNO", 18), so this matches what is actually deployed on 46630.
+    punoDecimals: 18,
     // The vault DeployTestnet stands up, funded and armed by hand on
     // 2026-08-14 (the deploy script does not call setAgent — see CLAUDE.md).
     // `agent` is read back from the chain and must stay equal to

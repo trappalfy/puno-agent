@@ -1,13 +1,18 @@
 import "server-only";
 import { and, eq, desc, sql } from "drizzle-orm";
-import { schema, getNetwork, PRICES_USD, type NetworkKey } from "@puno/shared";
+import { schema, getNetwork, PRICES_USD, FREE_TIER_NETWORK } from "@puno/shared";
 import { db } from "./db";
 
 /// The free tier lives on testnet. Mainnet's `demoVault` is deliberately null:
 /// a free run costs us model tokens and nothing else only because it never
 /// broadcasts, and pointing it at a mainnet vault would spend real gas on
 /// simulations for people who have not paid for anything.
-export const TRIAL_NETWORK: NetworkKey = "testnet";
+///
+/// Re-exported rather than re-declared: `/demo` had its own copy of this same
+/// literal, which made the two a pair that could drift with nothing failing —
+/// the public page would list one network's agents while runs happened on
+/// another. One decision, one constant, in `@puno/shared`.
+export const TRIAL_NETWORK = FREE_TIER_NETWORK;
 
 /// What one free run costs the account. A paper run cannot reach a billable
 /// trade (only a `confirmed` trade is charged), so this is screen + decision —

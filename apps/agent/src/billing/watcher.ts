@@ -129,7 +129,7 @@ export async function runDepositWatcher(): Promise<WatcherResult> {
         throw err;
       }
 
-      const amountUsd = tokensToUsd(tokenAmount, priceUsd, 18);
+      const amountUsd = tokensToUsd(tokenAmount, priceUsd, config.network.punoDecimals);
       if (!(amountUsd > 0)) {
         console.error(`[credits] deposit #${nonce} values to $0 at rate ${priceUsd} — skipping`);
         skipped++;

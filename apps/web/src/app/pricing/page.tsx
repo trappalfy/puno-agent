@@ -68,7 +68,7 @@ export default function PricingPage() {
                       </div>
                       <div className="text-num-xs font-jetbrains-mono tabular-nums text-white-faint">
                         {data?.pricesTokens
-                          ? `${formatTokens(data.pricesTokens[row.key], 2)} PUNO`
+                          ? `${formatTokens(data.pricesTokens[row.key], 2, data.contracts.punoDecimals)} PUNO`
                           : rate === null
                             ? "PUNO rate pending"
                             : "—"}

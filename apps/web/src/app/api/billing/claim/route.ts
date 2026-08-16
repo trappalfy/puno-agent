@@ -6,13 +6,13 @@ import {
   getPunoUsdPrice,
   tokensToUsd,
   TokenPriceUnavailableError,
+  creditsNetwork,
 } from "@puno/shared";
 import { db } from "@/lib/db";
 import { requireAccount } from "@/lib/auth";
-import { serverPublicClient, currentNetwork } from "@/lib/chain";
+import { publicClientFor } from "@/lib/chain";
 
 const TX_HASH_RE = /^0x[a-fA-F0-9]{64}$/;
-const TOKEN_DECIMALS = 18;
 
 /// Manual fallback for a deposit the watcher hasn't picked up — an RPC gap, a
 /// stale rate that has since been fixed, or simple impatience.
@@ -31,17 +31,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "txHash must be a 32-byte hex hash" }, { status: 400 });
   }
 
-  const network = currentNetwork();
-  if (!network.punoCredits) {
+  // Exactly one network sells credit at a time — see `creditsNetworkFrom`. The
+  // receipt is therefore looked up on that network's RPC and nowhere else: if
+  // this ever accepted a receipt from either chain, testnet's *mock* PUNO,
+  // which anyone can be sent for free, would buy real USD credit.
+  const network = creditsNetwork();
+  if (!network) {
     return NextResponse.json(
-      { error: "No PunoCredits contract is configured for this network yet." },
+      { error: "No PunoCredits contract is configured on any network yet." },
       { status: 501 },
     );
   }
 
   let receipt;
   try {
-    receipt = await serverPublicClient().getTransactionReceipt({
+    receipt = await publicClientFor(network.key).getTransactionReceipt({
       hash: txHash as `0x${string}`,
     });
   } catch {
@@ -95,7 +99,7 @@ export async function POST(request: Request) {
       throw err;
     }
 
-    const amountUsd = tokensToUsd(tokenAmount, priceUsd, TOKEN_DECIMALS);
+    const amountUsd = tokensToUsd(tokenAmount, priceUsd, network.punoDecimals);
     const result = await creditDeposit(db, {
       accountId: account.id,
       amountUsd,

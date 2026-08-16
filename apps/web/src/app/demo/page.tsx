@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq } from "drizzle-orm";
-import { schema, getNetwork, type NetworkKey } from "@puno/shared";
+import { schema, getNetwork, FREE_TIER_NETWORK } from "@puno/shared";
 import { db } from "@/lib/db";
 import { Card } from "@/components/ui/Card";
 import { MetricTile } from "@/components/ui/MetricTile";
@@ -16,7 +16,11 @@ import type { AgentDetail } from "@/lib/hooks/useAgentDetail";
 
 /// The demo lives on testnet, same vault the free run uses. Mainnet's
 /// `demoVault` is null on purpose (see lib/trial.ts).
-const DEMO_NETWORK: NetworkKey = "testnet";
+///
+/// Taken from the shared constant rather than restated: this page and the trial
+/// runner must always mean the same network, and a second literal is how they
+/// would eventually stop doing so.
+const DEMO_NETWORK = FREE_TIER_NETWORK;
 
 /// Reads the database on every request rather than at build time. A build-time
 /// prerender would need a database to build at all, and would then serve a

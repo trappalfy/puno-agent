@@ -7,12 +7,14 @@ import {
   usdToTokens,
   recentLedger,
   tryGetPunoUsdPrice,
-  getNetwork,
+  creditsNetwork,
   type BillableEvent,
 } from "@puno/shared";
 import { db } from "@/lib/db";
 import { requireAccount } from "@/lib/auth";
 
+/// Only a fallback for the window where no network sells credit yet — every
+/// live conversion below uses the selected network's own `punoDecimals`.
 const TOKEN_DECIMALS = 18;
 
 /// Everything the console and the pricing page need to show what an action
@@ -23,7 +25,12 @@ export async function GET() {
   if (!auth.ok) return auth.response;
   const { account } = auth;
 
-  const network = getNetwork((process.env.NETWORK as "mainnet" | "testnet") ?? "testnet");
+  // Whichever network is currently selling credit — exactly one at a time, and
+  // never a process-wide `NETWORK`: this app serves both chains from one
+  // deployment. See `creditsNetworkFrom` for why a union would let testnet's
+  // free mock PUNO buy real credit.
+  const network = creditsNetwork();
+  const decimals = network?.punoDecimals ?? TOKEN_DECIMALS;
 
   // Read-only path: a missing rate renders as "unavailable" rather than a 500.
   // Crediting a deposit still refuses outright — see getPunoUsdPrice.
@@ -44,7 +51,7 @@ export async function GET() {
     ? Object.fromEntries(
         Object.entries(pricesUsd).map(([event, usd]) => [
           event,
-          usd === 0 ? "0" : usdToTokens(usd, tokenPrice.priceUsd, TOKEN_DECIMALS).toString(),
+          usd === 0 ? "0" : usdToTokens(usd, tokenPrice.priceUsd, decimals).toString(),
         ]),
       )
     : null;
@@ -60,14 +67,23 @@ export async function GET() {
     pricesTokens,
     minDepositUsd: MIN_DEPOSIT_USD,
     minDepositTokens: tokenPrice
-      ? usdToTokens(MIN_DEPOSIT_USD, tokenPrice.priceUsd, TOKEN_DECIMALS).toString()
+      ? usdToTokens(MIN_DEPOSIT_USD, tokenPrice.priceUsd, decimals).toString()
       : null,
     tokenPrice: tokenPrice
       ? { priceUsd: tokenPrice.priceUsd, source: tokenPrice.source, at: tokenPrice.at }
       : null,
     contracts: {
-      punoToken: network.punoToken,
-      punoCredits: network.punoCredits,
+      punoToken: network?.punoToken ?? null,
+      punoCredits: network?.punoCredits ?? null,
+      // The chain those two addresses live on, so the browser can pin its
+      // `approve`/`deposit` to it instead of sending to wherever the wallet
+      // happens to be. Without this the top-up card can spend gas approving a
+      // testnet address on mainnet — a call to an address with no code
+      // succeeds silently, and at a colliding address it lands on some other
+      // contract entirely.
+      chainId: network?.chainId ?? null,
+      networkName: network?.name ?? null,
+      punoDecimals: network?.punoDecimals ?? TOKEN_DECIMALS,
     },
     ledger: ledger.map((row) => ({
       id: row.id,
