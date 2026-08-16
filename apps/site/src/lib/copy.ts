@@ -118,9 +118,19 @@ export const BUILT_ON = [
 /**
  * Replaces the source prompt's testimonials. Naming real companies as
  * customers would be false — the product is testnet-only with no user base
- * yet — so this is verifiable guarantees in the same three-card layout
- * instead of invented quotes. Swap in real testimonials here once there are
- * real ones.
+ * yet — so this is verifiable guarantees instead of invented quotes. Swap in
+ * real testimonials here once there are real ones.
+ *
+ * Six, not the original three, and the three added are the ones a reader
+ * cannot get elsewhere. The competitive review found the oracle floor — the
+ * strongest claim this contract can make — advertised nowhere at all, while
+ * the page led with "the agent cannot withdraw", which every non-custodial
+ * product says. Grid is `md:grid-cols-3`, so six lands as two clean rows.
+ *
+ * Every line below is a `require` in AgentVault.sol, checked against the
+ * source on 2026-08-16 rather than written from memory. Line references are
+ * given because a marketing claim about a contract should be falsifiable by
+ * whoever reads it.
  */
 export const GUARANTEES = [
   {
@@ -130,6 +140,24 @@ export const GUARANTEES = [
   {
     title: "Limits are enforced on-chain",
     body: "Per-trade cap, daily turnover, max position share — written into the vault contract. The contract itself reverts a trade that exceeds them, regardless of what the agent proposes.",
+  },
+  {
+    // executeTrade: `minOut >= _minAcceptableOut(...)` before the swap, then
+    // `amountOut >= minOut` after it. Two checks, and the first is what stops
+    // the agent naming its own floor.
+    title: "A bad fill reverts",
+    body: "The vault derives its own floor from the token's Chainlink price and the slippage you allow, refuses any trade proposing less, and re-checks what actually arrived against it afterwards. The agent supplies a number — it cannot lower the bar.",
+  },
+  {
+    // _normalizedPrice: `block.timestamp - updatedAt <= feed.maxStaleness`,
+    // per feed, and it reverts. Reached by every path that values anything.
+    title: "A stale price stops trading",
+    body: "Each feed carries its own freshness window, sized to that feed's heartbeat. If the last answer is older than that, the vault will not value your book or execute anything — it stops rather than acting on a mark it cannot trust.",
+  },
+  {
+    // executeTrade checks `!paused` before allowlists, caps or cooldown.
+    title: "The stop is on the contract",
+    body: "Pausing is a function on your own vault that only your wallet can call, and trading checks it before anything else. It halts execution at the chain rather than in our software — so it works whether or not we do.",
   },
   {
     title: "The session key expires",

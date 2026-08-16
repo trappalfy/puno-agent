@@ -193,7 +193,18 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
        holds the two body-parsing rules — permissive on create where absence safely means paper,
        strict on patch where there is no safe default — with 7 tests on the junk-input paths.
 5. [ ] **The comparison replay is invisible** — we pay for it and show the user nothing.
-6. [ ] **The oracle floor is unadvertised** — our strongest safety claim appears nowhere.
+6. [x] **The oracle floor is advertised. Done 2026-08-16.** `GUARANTEES` went from three cards to
+       six, and the three added are the ones a reader cannot get from any competitor's page: the
+       **oracle floor** (the vault computes its own minimum from the Chainlink price and rejects a
+       trade proposing less, so the agent supplies a number but cannot lower the bar), the
+       **staleness refusal** (a feed past its own window stops trading rather than acting on a
+       dead mark), and the **on-chain stop** (`pause()` is owner-only and checked first, so it
+       works whether or not our software does). The page had been leading with "the agent cannot
+       withdraw" — true, but the one claim every non-custodial product makes.
+       Each line was checked against `AgentVault.sol` on the day, not written from memory, and the
+       `require` behind it is named in a code comment so the claim stays falsifiable.
+       Fixed in passing: the card stagger was `i * 0.1` over what is now two rows, which left the
+       last card blank for half a second _after_ it had scrolled into view. Keyed to column now.
 
 ### Copy that is currently untrue
 

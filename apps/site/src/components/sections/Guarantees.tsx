@@ -6,6 +6,11 @@ import { GUARANTEES } from "../../lib/copy";
  * on GUARANTEES for why: naming real companies as customers would be false
  * for a testnet-only product with no user base yet. Same 3-column
  * liquid-glass layout, verifiable claims instead of invented quotes.
+ *
+ * The stagger keys off column, not index. Each figure has its own
+ * `whileInView` trigger, so a flat `i * 0.1` over six cards made the last one
+ * sit blank for half a second *after* it had already scrolled into view —
+ * accumulating a delay meant for one row across two.
  */
 export function Guarantees() {
   return (
@@ -20,7 +25,7 @@ export function Guarantees() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6, delay: i * 0.1 }}
+            transition={{ duration: 0.6, delay: (i % 3) * 0.1 }}
             className="liquid-glass rounded-2xl p-6"
           >
             <blockquote className="text-sm text-white/80 leading-[1.6]">{g.body}</blockquote>
