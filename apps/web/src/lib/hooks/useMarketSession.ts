@@ -13,11 +13,19 @@ import { agentVaultAbi, aggregatorV3Abi, classifyMarket, type MarketSession } fr
 ///
 /// Costs one read per allowlisted token plus one per feed. Acceptable for a
 /// page a person is looking at; it is not on the trading path.
+///
+/// `chainId` is the vault's chain and is carried on **every** contract entry
+/// below, not once at the top: wagmi's readContracts derives its own chain per
+/// group and overwrites a top-level value, so putting it there compiles, runs,
+/// and reads the wrong chain. The consequence here is specific — this hook
+/// decides whether the page says the market is open, and a wrong-chain read
+/// would report a healthy session for a vault that cannot trade.
 export function useMarketSession(
   vaultAddress: Address | undefined,
   quoteToken: string | undefined,
+  chainId: number | undefined,
 ): MarketSession | null {
-  const vault = { address: vaultAddress, abi: agentVaultAbi } as const;
+  const vault = { address: vaultAddress, abi: agentVaultAbi, chainId } as const;
 
   const { data: tokenCount } = useReadContract({
     ...vault,
@@ -66,6 +74,7 @@ export function useMarketSession(
         },
       ] as const,
       functionName: "symbol" as const,
+      chainId,
     })),
     query: { enabled: tokenAddresses.length > 0 },
   });
@@ -75,6 +84,7 @@ export function useMarketSession(
       address: (f.result as readonly [Address, number, number] | undefined)?.[0],
       abi: aggregatorV3Abi,
       functionName: "latestRoundData" as const,
+      chainId,
     })),
     query: { enabled: (feeds?.length ?? 0) > 0 },
   });

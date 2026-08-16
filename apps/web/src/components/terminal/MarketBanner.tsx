@@ -17,11 +17,13 @@ import { useMarketSession } from "@/lib/hooks/useMarketSession";
 export function MarketBanner({
   vaultAddress,
   quoteToken,
+  chainId,
 }: {
   vaultAddress: Address;
   quoteToken: string;
+  chainId: number;
 }) {
-  const session = useMarketSession(vaultAddress, quoteToken);
+  const session = useMarketSession(vaultAddress, quoteToken, chainId);
   if (!session || session.state === "open") return null;
 
   // Amber, never red: none of these is an error. A closed market is a clock, a

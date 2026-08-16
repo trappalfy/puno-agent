@@ -19,7 +19,15 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 /// disclosure triangle would be a worse product than a cluttered one. The
 /// explanation this used to carry as body prose now lives in the confirmation
 /// dialog, which is where someone actually needs to read it.
-export function KillSwitch({ vaultAddress }: { vaultAddress: Address }) {
+///
+/// `chainId` is the vault's own chain, not the wallet's, and it is required
+/// rather than optional. Without it every read here resolves against wagmi's
+/// current chain — testnet by default — so a mainnet vault's `owner()` would be
+/// read at that address on 46630. That does not reliably fail: the same deployer
+/// at the same nonce lands on the same address on every chain, so the read can
+/// return a *different* contract's owner and silently hide the stop control from
+/// the person who owns the vault. Same reasoning as the worker's network guard.
+export function KillSwitch({ vaultAddress, chainId }: { vaultAddress: Address; chainId: number }) {
   const { address } = useAccount();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -27,16 +35,19 @@ export function KillSwitch({ vaultAddress }: { vaultAddress: Address }) {
     address: vaultAddress,
     abi: agentVaultAbi,
     functionName: "paused",
+    chainId,
   });
   const { data: owner } = useReadContract({
     address: vaultAddress,
     abi: agentVaultAbi,
     functionName: "owner",
+    chainId,
   });
 
   const { writeContract, data: txHash, isPending } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({
     hash: txHash,
+    chainId,
     query: { enabled: !!txHash },
   });
 
@@ -76,6 +87,12 @@ export function KillSwitch({ vaultAddress }: { vaultAddress: Address }) {
               address: vaultAddress,
               abi: agentVaultAbi,
               functionName: isPaused ? "unpause" : "pause",
+              // Passing it turns a wrong-chain send into a ChainMismatchError
+              // *before* the wallet prompt. Omitted, viem skips
+              // assertCurrentChain entirely and the pause goes wherever the
+              // wallet happens to be — which for a stop control is the worst
+              // possible place to be lenient.
+              chainId,
             },
             {
               onSuccess: () => {

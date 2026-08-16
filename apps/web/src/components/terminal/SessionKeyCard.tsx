@@ -22,14 +22,20 @@ function formatCountdown(expirySec: bigint): string {
 
 /// DESIGN.md #20 — the agent key's scope, a countdown to expiry, a revoke
 /// action. Revoke calls the vault's own revokeAgent() (owner-only).
+/// `chainId` is the vault's chain — see KillSwitch for why it is required. The
+/// expiry countdown is the reason it matters here specifically: read against the
+/// wrong chain it would show a confident number belonging to a different
+/// contract, and the card's whole job is to say when this key stops working.
 export function SessionKeyCard({
   vaultAddress,
   agentAddress,
   explorerBaseUrl,
+  chainId,
 }: {
   vaultAddress: Address;
   agentAddress: Address;
   explorerBaseUrl: string;
+  chainId: number;
 }) {
   const { address } = useAccount();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -38,21 +44,25 @@ export function SessionKeyCard({
     address: vaultAddress,
     abi: agentVaultAbi,
     functionName: "owner",
+    chainId,
   });
   const { data: expiry, refetch: refetchExpiry } = useReadContract({
     address: vaultAddress,
     abi: agentVaultAbi,
     functionName: "agentExpiry",
+    chainId,
   });
   const { data: onChainAgent, refetch: refetchAgent } = useReadContract({
     address: vaultAddress,
     abi: agentVaultAbi,
     functionName: "agent",
+    chainId,
   });
 
   const { writeContract, data: txHash, isPending } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({
     hash: txHash,
+    chainId,
     query: { enabled: !!txHash },
   });
 
@@ -97,7 +107,7 @@ export function SessionKeyCard({
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => {
           writeContract(
-            { address: vaultAddress, abi: agentVaultAbi, functionName: "revokeAgent" },
+            { address: vaultAddress, abi: agentVaultAbi, functionName: "revokeAgent", chainId },
             {
               onSuccess: () => {
                 setConfirmOpen(false);

@@ -90,7 +90,12 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
 
   const { agent, vault, limits, positions, trades, signals, navUsd } = data;
   const pnlUsd = sumPositionsPnlUsd(positions);
-  const explorerBaseUrl = getNetwork(vault.network).explorerUrl;
+  // Everything on this page is scoped to the vault's *own* network, read from
+  // its row — never to whatever chain the wallet is connected to. The same
+  // account legitimately holds a testnet trial agent and a mainnet vault, and
+  // an address can exist on both chains as two entirely different contracts.
+  const vaultNetwork = getNetwork(vault.network);
+  const explorerBaseUrl = vaultNetwork.explorerUrl;
 
   // Newest first — the API orders by createdAt desc.
   const [latest, ...earlier] = signals;
@@ -117,13 +122,17 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
             other decides whether its trades are real. */}
         <div className="flex flex-wrap items-start gap-[var(--spacing-16)]">
           <ExecutionMode agentId={agent.id} dryRun={agent.dryRun} />
-          <KillSwitch vaultAddress={vault.address as Address} />
+          <KillSwitch vaultAddress={vault.address as Address} chainId={vaultNetwork.chainId} />
         </div>
       </div>
 
       {/* Above the numbers, because "why is nothing happening" outranks every
           figure on this page when the answer is "it is Saturday". */}
-      <MarketBanner vaultAddress={vault.address as Address} quoteToken={vault.quoteToken} />
+      <MarketBanner
+        vaultAddress={vault.address as Address}
+        quoteToken={vault.quoteToken}
+        chainId={vaultNetwork.chainId}
+      />
 
       <div className="grid grid-cols-1 gap-[var(--layout-element-gap)] md:grid-cols-3">
         <MetricTile
@@ -168,12 +177,17 @@ export default function AgentDetailPage({ params }: { params: Promise<{ id: stri
           <TradesTable trades={trades} explorerBaseUrl={explorerBaseUrl} />
         </Disclosure>
 
-        <RiskLimitsPanel vaultAddress={vault.address as Address} offChainLimits={limits} />
+        <RiskLimitsPanel
+          vaultAddress={vault.address as Address}
+          offChainLimits={limits}
+          chainId={vaultNetwork.chainId}
+        />
 
         <SessionKeyCard
           vaultAddress={vault.address as Address}
           agentAddress={agent.agentAddress as Address}
           explorerBaseUrl={explorerBaseUrl}
+          chainId={vaultNetwork.chainId}
         />
       </div>
     </div>

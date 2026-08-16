@@ -30,11 +30,18 @@ function bps(value: bigint | number | undefined): string {
 export function RiskLimitsPanel({
   vaultAddress,
   offChainLimits,
+  chainId,
 }: {
   vaultAddress: Address;
   offChainLimits: AgentDetail["limits"];
+  chainId: number;
 }) {
-  const contract = { address: vaultAddress, abi: agentVaultAbi } as const;
+  // `chainId` goes in the shared contract object, i.e. on **every entry**, not
+  // as a sibling of `contracts`. wagmi's readContracts groups calls by
+  // `contract.chainId ?? config.state.chainId` and then passes its own derived
+  // value to multicall *after* spreading the rest, so a top-level `chainId` is
+  // accepted and silently ignored — a fix that looks right and does nothing.
+  const contract = { address: vaultAddress, abi: agentVaultAbi, chainId } as const;
   const { data } = useReadContracts({
     contracts: [
       { ...contract, functionName: "maxNotionalPerTrade" },
