@@ -202,13 +202,14 @@ test fixtures naming a network on purpose and one comment recording what used to
 - [x] **Copy that asserted one network is derived now.** The GeoGate consent dialog said "no real
       funds are at risk"; left as text, that becomes a materially false risk statement the moment
       mainnet opens. "Free, on testnet" was left alone — permanently true by product decision.
-- [ ] **The SIWE session is signed with `chainId: 46630`.** A user who takes the free run on
-      testnet and then creates a paid mainnet vault crosses networks mid-journey, so this is not a
-      constant swap — it needs a re-auth path, or a session that is not chain-scoped.
-- [ ] **`NetworkGuard` blocks the whole console on any chain but the pinned one.** It has to become
-      per-vault: the same account will legitimately hold a testnet trial agent and a mainnet vault.
 - [ ] **Mainnet is nine signatures, not six** — five equities rather than two. Nothing to fix; the
       ledger is already generated from the selection. Worth knowing before quoting the flow.
+
+Two items were removed from this list on 2026-08-16 rather than ticked, because they were stale
+duplicates of the `[x]` entries above and would have been read as open work: the SIWE `chainId`
+item (closed by `siweChain.ts` — the session is not chain-scoped, so no re-auth path was needed)
+and the `NetworkGuard` item (closed by `RequireNetwork`, mounted per control; the global gate is
+gone from `app/layout.tsx` and `NetworkGuard.tsx` is deleted).
 
 ### Security and ownership — must happen before mainnet money
 
