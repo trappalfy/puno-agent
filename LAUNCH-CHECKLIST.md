@@ -323,6 +323,16 @@ single-sided Uniswap V3 pattern this chain's launchpads use puts **no USDG in th
 until someone buys, so on day one there is nothing to sell revenue into. That is exactly the
 liability the treasury-conversion item above names, arriving through a different door.
 
+**Set `PUNO_MIN_DEPOSIT` deliberately low — around a $1 equivalent, not $5.** There are two
+minimums and they drift apart with the market. `MIN_DEPOSIT_USD = 5.0` is display only; there is
+no server-side check, verified. `PunoCredits.minDeposit` is raw token units and is the hard
+on-chain gate. Denominate the on-chain one at $5 and a 5× price rise makes it a $25 floor while
+the UI still promises $5, and deposits start reverting with `PunoCredits: below minimum` — fixable
+only by a transaction from the cold owner wallet. At a $1 equivalent it does the job it is
+actually for, keeping out dust that costs more to index than it is worth, and the $5 product
+minimum stays where it belongs, in the interface. A price rise then locks nobody out, and a fall
+just admits slightly smaller deposits, which is harmless.
+
 ### Measurement still owed
 
 - [ ] **Re-measure the screen cost.** D1's fix added the decision summary to the ~2,885-token
