@@ -139,7 +139,7 @@ free run cannot spend real gas — but the web app does not implement it.
 **Web half started 2026-08-16. Done so far:**
 
 - [x] **`packages/shared/src/network/policy.ts`** — the decisions that were spread across files
-      or absent. `whyClosed()` is one predicate for "can someone create *and pay for* an agent
+      or absent. `whyClosed()` is one predicate for "can someone create _and pay for_ an agent
       here", returning the reason as a string so a gate's copy cannot disagree with its
       condition. It names PUNO rather than the factory on purpose: `VaultFactory` is to be
       deployed to mainnet **before** the token exists, and that must not open the wizard. It
@@ -533,7 +533,7 @@ Four things must be built before that is true, none of which existed on 2026-08-
 - [ ] **Tell the owner now: PUNO must launch with exactly 18 decimals.** `punoDecimals` records
       the requirement and `preflight` will check it, but a token already deployed with 9 cannot
       be fixed by config — it becomes code, at the worst possible moment.
-- [ ] **Split `DeployMainnet`.** It *always* deploys `VaultFactory`, so running it at T-0 after
+- [ ] **Split `DeployMainnet`.** It _always_ deploys `VaultFactory`, so running it at T-0 after
       an early factory deploy creates a **second** factory. A separate `DeployPunoCredits.s.sol`
       makes T-0 a one-purpose command. Add the `treasury != deployer` guard while there —
       `DeployTestnet:61` has it and `DeployMainnet` does not.
@@ -544,7 +544,7 @@ Four things must be built before that is true, none of which existed on 2026-08-
       expiry warning in the worker's logs, not just the script.
 - [ ] **`preflight`** — one command, one green/red table, reading the chain and the database
       rather than deploy logs: bytecode at every recorded address, `PunoCredits.token()` == the
-      CA, `decimals()` == 18, `owner()` == the cold wallet *after* `acceptOwnership`, treasury ≠
+      CA, `decimals()` == 18, `owner()` == the cold wallet _after_ `acceptOwnership`, treasury ≠
       deployer, `VaultFactory.quoteToken()` == USDG, ETH balances for deployer and
       `serviceAgent`, rate freshness, `reconcile()`, and a machine check that no address equals
       the old deployer or the attacker's.
