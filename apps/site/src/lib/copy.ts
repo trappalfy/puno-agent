@@ -104,6 +104,15 @@ export const COST_TIERS: {
   },
 ];
 
+/**
+ * The stack, as advertised. Every entry has to still be true — this row is the
+ * cheapest thing on the page for a sceptic to check, and the six guarantees
+ * below it are the expensive thing to have doubted.
+ *
+ * `Stripe` sat here until 2026-08-17 and had to go: subscription tiers were
+ * removed and Stripe with them, so the page was naming a payment provider the
+ * product does not use, on the eve of driving traffic to it.
+ */
 export const BUILT_ON = [
   "Robinhood Chain",
   "Anthropic Claude",
@@ -112,7 +121,6 @@ export const BUILT_ON = [
   "wagmi",
   "Drizzle",
   "Postgres",
-  "Stripe",
 ];
 
 /**
