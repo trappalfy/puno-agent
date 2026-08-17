@@ -12,6 +12,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
     "set-rate": "tsx src/billing/set-rate.ts",
+    "preflight": "tsx src/preflight/run.ts",
     "compare:report": "tsx src/compare/report.ts",
     "test": "node --import tsx --test src/**/*.test.ts"
   },

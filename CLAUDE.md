@@ -547,7 +547,22 @@ pnpm --filter @puno/web dev                     # product app
 pnpm --filter @puno/site dev                    # landing
 pnpm --filter @puno/agent db:migrate            # apply DB migrations
 pnpm --filter @puno/agent set-rate -- 0.001 --note "why"   # PUNO/USD rate
+pnpm --filter @puno/agent preflight             # readiness, read from chain + DB
 ```
+
+**`preflight` is the answer to "did that all line up", and it reads rather than assumes.** Fifteen
+rows from the chain and the database, never from a deploy log — bytecode at every recorded address,
+`PunoCredits.token()`/`owner()`/`pendingOwner()`/`treasury()`, `decimals()` against `punoDecimals`,
+`VaultFactory.quoteToken()`, gas for `serviceAgent` and the deployer, rate freshness via
+`usableForCredit`, the ledger invariant, and a machine sweep for the two incident addresses across
+every value it touched. It prints the database host, because half the rows describe a database and
+a run against localhost looks identical to one against Neon.
+
+**Four statuses and the fourth is the design.** `skip` (could not check) blocks a green verdict;
+`na` (nothing there on this network) does not, but is printed and counted. Collapsing those two is
+how "we never checked" reads as "fine". `PUNO_OWNER` unset on mainnet fails rather than skips —
+unproven ownership is not proven ownership. `PUNO_OWNER` and `DEPLOYER_ADDRESS` are the two
+expectations that cannot come from the chain; both are public addresses, never keys.
 
 Note: the script is `db:migrate`, not `migrate` — this file said `migrate` until 2026-08-14
 and that command does not exist.

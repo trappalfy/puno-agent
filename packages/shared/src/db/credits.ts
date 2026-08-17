@@ -257,6 +257,42 @@ export async function reconcile(
   return { balanced: Math.abs(cachedUsd - ledgerUsd) < 1e-6, cachedUsd, ledgerUsd };
 }
 
+/// The same invariant across every account at once, for `preflight`.
+///
+/// `reconcile` above needs an account id, which is the wrong shape for the
+/// question "is the ledger sound?" — asking it per account means knowing which
+/// accounts to ask about, and the account that drifted is exactly the one nobody
+/// thought to name. Returns the offenders rather than a bare boolean, because
+/// "the ledger does not balance" is not actionable and "account X is $0.50 out"
+/// is.
+///
+/// One query, grouped, so the cost does not grow with a loop over accounts.
+export async function reconcileAll(db: CreditsDb): Promise<{
+  balanced: boolean;
+  accountsChecked: number;
+  drifted: { accountId: string; cachedUsd: number; ledgerUsd: number }[];
+}> {
+  const rows = await db
+    .select({
+      accountId: schema.accounts.id,
+      cached: schema.accounts.creditBalanceUsd,
+      ledger: sql<string>`coalesce(sum(${schema.creditLedger.amountUsd}), 0)`,
+    })
+    .from(schema.accounts)
+    .leftJoin(schema.creditLedger, eq(schema.creditLedger.accountId, schema.accounts.id))
+    .groupBy(schema.accounts.id, schema.accounts.creditBalanceUsd);
+
+  const drifted = rows
+    .map((row) => ({
+      accountId: row.accountId,
+      cachedUsd: toNumber(row.cached),
+      ledgerUsd: toNumber(row.ledger),
+    }))
+    .filter((row) => Math.abs(row.cachedUsd - row.ledgerUsd) >= 1e-6);
+
+  return { balanced: drifted.length === 0, accountsChecked: rows.length, drifted };
+}
+
 /// Latest manually-set PUNO/USD rate, or null if none has ever been set.
 export async function latestPriceOverride(
   db: CreditsDb,

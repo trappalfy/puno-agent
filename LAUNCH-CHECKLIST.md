@@ -623,12 +623,49 @@ Four things must be built before that is true, none of which existed on 2026-08-
       and `minDeposit > 0`. `forge test` 80 → 91.
 - [x] **A write path for the PUNO/USD rate. Done 2026-08-16.** See _The rate: how it is written
       and when it expires_ below.
-- [ ] **`preflight`** — one command, one green/red table, reading the chain and the database
-      rather than deploy logs: bytecode at every recorded address, `PunoCredits.token()` == the
-      CA, `decimals()` == 18, `owner()` == the cold wallet _after_ `acceptOwnership`, treasury ≠
-      deployer, `VaultFactory.quoteToken()` == USDG, ETH balances for deployer and
-      `serviceAgent`, rate freshness, `reconcile()`, and a machine check that no address equals
-      the old deployer or the attacker's.
+- [x] **`preflight`. Built 2026-08-17** — `pnpm --filter @puno/agent preflight`. Fifteen rows, all
+      read from the chain or the database rather than from a deploy log. See _What preflight is_
+      below for what it checks and what it found on its first run.
+
+#### What `preflight` is
+
+`apps/agent/src/preflight/` — `checks.ts` holds the predicates with no I/O, `run.ts` gathers and
+prints, the same split as `rate-input.ts` vs `set-rate.ts`. 33 tests on the pure half.
+
+It covers the list this item originally asked for: bytecode at every recorded address,
+`PunoCredits.token()` against config, `decimals()` against `punoDecimals`, `owner()` **and
+`pendingOwner()`** together, treasury ≠ deployer and ≠ owner, `VaultFactory.quoteToken()` == USDG,
+ETH for `serviceAgent` and the deployer, rate freshness via `usableForCredit`, the ledger invariant
+across every account, and a machine sweep for the two incident addresses over every value the run
+touched — config fields and chain reads alike.
+
+**Four statuses, not two, and that is the design decision worth keeping.** `skip` means the check
+could not be performed and **blocks a green verdict**; `na` means there is genuinely nothing there
+on this network — mainnet has no PUNO, testnet has no cold wallet — and does not block, but is
+still printed and counted in the headline. A two-state table collapses "we could not find out" into
+the same silence as "nothing to find", and the first is the state this command exists to catch.
+`PUNO_OWNER` unset on mainnet is a **fail**, not a skip: unproven ownership is not proven ownership.
+
+Two expectations cannot come from the chain and are read from the environment, both public
+addresses and never keys: `PUNO_OWNER` (the cold wallet) and `DEPLOYER_ADDRESS`. It also prints the
+database host, because half the rows describe a database and a run against localhost looks exactly
+like a run against Neon — the same class of mistake `set-rate` avoids by printing the previous rate.
+
+#### What its first run found, 2026-08-17
+
+Against testnet: 11 pass, 1 fail, 1 skip, 2 n/a. The failure is real and was not otherwise visible.
+
+- [ ] **`serviceAgent` `0x389AA9c0…0adD` holds ~0.0000016 ETH on testnet** — verified independently
+      with `cast balance`. The hosted worker runs with `DRY_RUN=false` and the price keeper
+      broadcasts `setAnswer` roughly every 20 minutes at ~3e-7 ETH a call, so the balance is being
+      spent as it sits. When it empties, mock feeds go stale within the hour and the demo agent
+      declines to trade — the failure CLAUDE.md calls the worst possible first impression, and it
+      arrives systematically rather than occasionally. Top up from
+      `https://faucet.testnet.chain.robinhood.com`; testnet ETH cannot be bridged in.
+
+Writing the checks also turned up a message that contradicted itself: a balance one wei under the
+floor printed as "holds 0.001000 ETH, under the 0.001 floor", because `toFixed` rounds. Balances are
+truncated now — rounding one up is wrong in every direction in a message about a shortfall.
 
 #### Decimals
 

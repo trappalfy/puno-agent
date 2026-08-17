@@ -49,4 +49,25 @@ export const punoCreditsAbi = [
     inputs: [],
     outputs: [{ type: "uint256" }],
   },
+  // From Ownable2Step. Present on chain since deployment but absent here until
+  // `preflight` needed them, and the pair is what makes the handover checkable:
+  // `owner` alone cannot distinguish "transferred and accepted" from
+  // "transferred and still pending", and only the accepted case moves control
+  // off the deploying key. Whoever owns this contract can move the treasury and
+  // therefore redirect every payment the product takes, so the answer has to
+  // come from the chain rather than from a deploy log.
+  {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "pendingOwner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
 ] as const;
