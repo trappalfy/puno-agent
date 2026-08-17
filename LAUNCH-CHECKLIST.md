@@ -96,32 +96,48 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       deriving it to `0x389AA9c0…0adD`.
       `NETWORK` was deliberately **not** set as a secret: it is in `fly.mainnet.toml`'s `[env]`, and
       a Fly secret overrides `[env]`, which would leave the committed value dead while still reading
-      as authoritative. `ANTHROPIC_API_KEY` followed on 2026-08-17 — its Fly digest matches the
-      testnet app's exactly, which is how the two are known to be the same key without either being
-      read. `DATABASE_URL` is the last one and must be the Neon string; the same digest trick proves
-      it. **`ENCRYPTION_KEY` is not on the list, and an earlier version of this file said it was** —
-      see the BYOK finding below for why the worker does not need it and why that is a problem
+      as authoritative. **All three secrets are staged as of 2026-08-17** and the app still has no
+      machines. **`ENCRYPTION_KEY` is not among them, and an earlier version of this file said it
+      should be** — see BYOK-1 below for why the worker does not need it and why that is a problem
       rather than a convenience.
-      **`DEPLOYMENT.md` used to forbid this outright and the ban was too wide.** Its concern was
-      running a mainnet worker with nothing to do, which still holds; but `fly secrets import`
-      against an app with no machines runs nothing, so the key could move while mainnet stayed
-      closed by construction. Worth doing now rather than at T-0: a plaintext key on the laptop that
-      was found backdoored in August should not wait for the day that already has twenty steps.
-      Set over **stdin**, never as a command argument — PowerShell keeps arguments in
-      `ConsoleHost_history.txt` — and `\r` was stripped explicitly, since a CRLF file would have put
-      a trailing carriage return inside the secret and the failure would not have surfaced until the
-      worker's first boot.
-      **The recovery copy is proven, not assumed.** A Fly secret cannot be read back, so nothing
-      short of a successful boot proves the stored value, and that boot is at T-0. So the owner wrote
-      the key on paper, then typed it back from paper into a scratch file which derived to
-      `0x0aCd6ea59305B882FDC42e78b209Ec9bC39926a8` — the configured address. Eyeballing paper against
-      a screen would not have caught a single wrong character in the middle; deriving the address
-      does. Both scratch file and original are now deleted.
-      Why this key earns that care: it signs `executeTrade` for **every** mainnet vault, and vaults
-      are armed with its address at creation. Losing it means every vault owner must call `setAgent`
-      themselves — free today at zero vaults, unfixable from our side once there are users. A leak is
-      serious but bounded: `withdraw` is owner-only, so a stolen key can force trades inside each
-      vault's policy and cannot take funds out.
+
+#### Proving Fly secrets without reading them
+
+`fly secrets list` prints a digest that is deterministic over the value, so two apps can be shown to
+share — or not share — a secret without either being revealed. Noticed by accident when the mainnet
+`ANTHROPIC_API_KEY` came back with the testnet app's digest. It turns the one thing about a
+write-only store that is normally unverifiable into a check:
+
+| Secret              | mainnet            | testnet            | Must they match?                |
+| ------------------- | ------------------ | ------------------ | ------------------------------- |
+| `AGENT_PRIVATE_KEY` | `205a98d1a02c5ac3` | `3e91f4736518311a` | **No** — one key per network    |
+| `ANTHROPIC_API_KEY` | `3aea1462791f8b09` | `3aea1462791f8b09` | **Yes** — one Anthropic account |
+| `DATABASE_URL`      | `26909bb5826390b2` | `26909bb5826390b2` | **Yes** — one Neon database     |
+
+The one that must differ differs; the two that must match match. This is the strongest statement
+available about the staged values short of a deploy, and it is worth re-running after any secret is
+rotated — a `DATABASE_URL` that stops matching means one worker is writing to a database the other
+cannot see, which no test would catch.
+**`DEPLOYMENT.md` used to forbid this outright and the ban was too wide.** Its concern was
+running a mainnet worker with nothing to do, which still holds; but `fly secrets import`
+against an app with no machines runs nothing, so the key could move while mainnet stayed
+closed by construction. Worth doing now rather than at T-0: a plaintext key on the laptop that
+was found backdoored in August should not wait for the day that already has twenty steps.
+Set over **stdin**, never as a command argument — PowerShell keeps arguments in
+`ConsoleHost_history.txt` — and `\r` was stripped explicitly, since a CRLF file would have put
+a trailing carriage return inside the secret and the failure would not have surfaced until the
+worker's first boot.
+**The recovery copy is proven, not assumed.** A Fly secret cannot be read back, so nothing
+short of a successful boot proves the stored value, and that boot is at T-0. So the owner wrote
+the key on paper, then typed it back from paper into a scratch file which derived to
+`0x0aCd6ea59305B882FDC42e78b209Ec9bC39926a8` — the configured address. Eyeballing paper against
+a screen would not have caught a single wrong character in the middle; deriving the address
+does. Both scratch file and original are now deleted.
+Why this key earns that care: it signs `executeTrade` for **every** mainnet vault, and vaults
+are armed with its address at creation. Losing it means every vault owner must call `setAgent`
+themselves — free today at zero vaults, unfixable from our side once there are users. A leak is
+serious but bounded: `withdraw` is owner-only, so a stolen key can force trades inside each
+vault's policy and cannot take funds out.
 
 #### How ETH gets onto 4663, established 2026-08-17
 
