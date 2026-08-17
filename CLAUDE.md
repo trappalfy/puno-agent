@@ -14,6 +14,37 @@ Read it before touching anything.
 > (expected test counts, the on-chain invariants, the address rule) that this file only
 > summarises. Update it in place; never start a second one.
 
+## ⚑ T-0 — when the PUNO contract address arrives
+
+**A message carrying a PUNO contract address is the launch, not a question about it.** It looks
+like "вот наш токен CA: 0x…" and there will be no other announcement. Open
+**`LAUNCH-CHECKLIST.md` → _The order on the day_** and start executing. Do not re-plan, do not
+re-derive the steps, do not summarise them back — they were written on 2026-08-17 precisely so
+that this hour is execution and nothing else. The owner's words on the point: _the market does
+not wait._
+
+Three things to know before the first command, all of which cost time if learned mid-sequence:
+
+- **Two inputs are needed, not one.** The address **and the launch price** — `PUNO_MIN_DEPOSIT`
+  is a token count, and the one in `.env` is $5 only at $0.00001. Ask for the price in the same
+  breath as acknowledging the address; do not wait to be told.
+- **Two steps cannot be done from here** and the owner must run them: `set-rate` against Neon
+  (the connection string is not on this machine and must not be) and `acceptOwnership()` (only
+  the owning address can call it). Hand both over early so they run in parallel rather than
+  blocking.
+- **Step 04 is the only irreversible one.** Everything before it is verification, which is why
+  verification comes first rather than being trimmed for speed.
+
+Everything preparable was prepared on 2026-08-17: `VaultFactory` is live at
+`0x57b35e8D7F2Bfd27B8D26cDeB7a36eb27Ce5a679`, both keys hold gas, the treasury and owner
+addresses are chosen and in `.env`, all three Fly secrets are staged on `puno-worker-mainnet`,
+and `fly.mainnet.toml` is written with `DRY_RUN` deliberately absent. Nothing on the critical
+path is development work.
+
+The owner reads the same sequence as a page:
+`https://claude.ai/code/artifact/50098956-7e4d-4137-8068-6322908da23a`. It is a rendering of the
+checklist section, not a second source — if they ever disagree, the checklist is right.
+
 ---
 
 ## Layout
