@@ -91,7 +91,9 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       stronger check than a test transfer, since ETH sent to an address we hold no key for is gone
       permanently and would not surface until T-0.
 - [ ] **Move the key off this laptop.** `.env.mainnet.local` is a holding place, not a home. It
-      belongs in Fly's secret store as `AGENT_PRIVATE_KEY` alongside `NETWORK=mainnet`.
+      belongs in Fly's secret store as `AGENT_PRIVATE_KEY`. Not `NETWORK` — that is in
+      `fly.mainnet.toml`'s `[env]`, and a Fly secret overrides `[env]`, which would make the
+      committed value dead while still reading as authoritative.
       **Unblocked 2026-08-17 and doable before T-0**, which `DEPLOYMENT.md` used to forbid: the
       concern behind that ban was running a mainnet worker with nothing to do, and `fly secrets set`
       against an app with no machines runs nothing — it stages the value encrypted until a first
