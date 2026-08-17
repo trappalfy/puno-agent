@@ -173,10 +173,30 @@ describe("resolveTokenPrice — crediting window vs display window", () => {
   });
 
   it("reports a sub-two-day age in hours, not as '1 days'", () => {
+    // The window is passed explicitly rather than leaning on
+    // MAX_OVERRIDE_AGE_MS, because since that went to 72 h no *expired* age can
+    // be under the 48 h mark where formatAge switches to days — so pinning this
+    // to the constant would mean the hours branch had no test at all.
     const stale = new Date(now.getTime() - 26 * 3_600_000);
     assert.throws(
+      () =>
+        resolveTokenPrice({
+          twap: null,
+          override: { priceUsd: 0.1, at: stale },
+          now,
+          maxOverrideAgeMs: 12 * 3_600_000,
+        }),
+      /26 hours old \(max 12 hours\)/,
+    );
+  });
+
+  it("reports the widened window itself in days", () => {
+    // The other side of the same formatter, and the one an operator actually
+    // reads now: at 72 h the message says "3 days", not "72 hours".
+    const stale = new Date(now.getTime() - (MAX_OVERRIDE_AGE_MS + 3_600_000));
+    assert.throws(
       () => resolveTokenPrice({ twap: null, override: { priceUsd: 0.1, at: stale }, now }),
-      /26 hours old \(max 24 hours\)/,
+      /max 3 days/,
     );
   });
 

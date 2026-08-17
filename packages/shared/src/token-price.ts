@@ -40,12 +40,31 @@ export class TokenPriceUnavailableError extends Error {
 /// damage is bounded — credit is spend-only, there is no path that takes it
 /// back out of the system — but the bound is our Anthropic bill, not zero.
 ///
-/// Failing closed is what makes a window this short affordable: the deposit
-/// stays on-chain, the indexer refuses to advance its cursor past an event it
-/// could not value, and everything replays once a rate is set. Users wait;
-/// nothing is lost. Was 7 days, which is far longer than a launching token
-/// holds a price.
-export const MAX_OVERRIDE_AGE_MS = 24 * 60 * 60 * 1000;
+/// Failing closed is what makes a short window affordable: the deposit stays
+/// on-chain, the indexer refuses to advance its cursor past an event it could
+/// not value, and everything replays once a rate is set. Users wait; nothing is
+/// lost. Was 7 days, which is far longer than a launching token holds a price.
+///
+/// **72 hours, and the number is a schedule rather than a risk appetite**
+/// (widened from 24 h on 2026-08-17). Until `readPoolTwap` reads a real pool,
+/// this rate is written by a human running `set-rate`, and what actually matters
+/// operationally is not the window but the slack: `window − refresh interval`.
+/// At 24 h with a daily refresh the slack is **zero** — forget once and crediting
+/// stops. At 72 h the same daily habit absorbs two consecutive misses, which is
+/// what an unstaffed weekend or one sick day looks like.
+///
+/// It is not longer than that because a stale rate is not only *our* exposure.
+/// In the direction where ours is the low one the depositor is short-changed:
+/// the top-up card asks for tokens worth $60 at the current market and credits
+/// $20, and during a launch week a token moves multiples. That harm has no
+/// bound, unlike the buy-cheap-deposit-high direction above, and a week-long
+/// window is where it starts being measured in someone else's money.
+///
+/// Setting the rate does not have to wait for expiry — the age is measured from
+/// the newest row, so writing it resets the clock. Refresh on a schedule and
+/// this window is never approached; the warning below is then a backstop rather
+/// than an alarm clock.
+export const MAX_OVERRIDE_AGE_MS = 72 * 60 * 60 * 1000;
 
 /// How old a rate may be and still be **shown**.
 ///
@@ -60,13 +79,22 @@ export const MAX_OVERRIDE_AGE_MS = 24 * 60 * 60 * 1000;
 /// the strict one goes where value moves and not everywhere.
 export const MAX_DISPLAY_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-/// When the worker should start saying the rate is about to expire.
+/// How much of the crediting window may remain before the worker starts saying
+/// the rate is about to expire.
 ///
-/// Half the crediting window, so the warning arrives with a working day left to
-/// act on. Billing that stops silently the day after launch is the worst of the
-/// available failures and it is the *default* one — nothing else in the system
-/// mentions the rate until a deposit fails to value.
-export const OVERRIDE_WARNING_AGE_MS = 12 * 60 * 60 * 1000;
+/// Billing that stops silently is the worst of the available failures and it is
+/// the *default* one — nothing else in the system mentions the rate until a
+/// deposit fails to value.
+///
+/// **A full day of margin, not half the window.** It was half (12 h of 24 h),
+/// and scaling that rule to the 72 h window would warn at 36 h remaining — which
+/// under the daily refresh habit the window is sized for means warning while two
+/// thirds of it is still unused. A warning that fires on a healthy schedule is
+/// one an operator learns to skip, and then the real one goes with it. At 24 h
+/// remaining the rate has already gone a full cycle unrefreshed, which is the
+/// first moment something is actually wrong, and there is still a whole day to
+/// act.
+export const OVERRIDE_WARNING_AGE_MS = 24 * 60 * 60 * 1000;
 
 export interface PriceInputs {
   twap: { priceUsd: number; at: Date } | null;

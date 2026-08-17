@@ -706,17 +706,34 @@ Three things beyond the insert, each earned rather than decorative:
 **Expiry is now two windows, not one.** `MAX_OVERRIDE_AGE_MS` was 7 days and governed both
 crediting and display, so narrowing it for a volatile launch would have blanked the public pricing
 page at the same moment billing stopped — and those failures are not comparable. Now
-`MAX_OVERRIDE_AGE_MS = 24h` (crediting) and `MAX_DISPLAY_AGE_MS = 7d` (display), the same shape as
+`MAX_OVERRIDE_AGE_MS = 72h` (crediting) and `MAX_DISPLAY_AGE_MS = 7d` (display), the same shape as
 the contract's `QUOTE_STALENESS` vs `EQUITY_STALENESS`.
 
 That creates a state which did not exist before — a rate fresh enough to show and too old to
 charge against — so `TokenPrice` carries `usableForCredit` and `TopUpCard` stops quoting an amount
 to send when it is false. That quote is a transaction instruction, not a price label.
 
-The worker warns hourly from 12h (`rateStalenessWarning`), on its own timer rather than inside the
-deposit poll: the rate expires whether or not anyone is depositing, and the quiet week is the case
-worth catching. **When it does expire nothing is lost** — the indexer refuses to advance its
-cursor past an event it could not value, and every deposit replays once a rate is set.
+**Crediting went 24h → 72h on 2026-08-17, and the reason is the refresh schedule rather than a
+change of risk appetite.** While a human writes this number, what governs whether billing survives
+is `window − refresh interval`. At 24h refreshed daily that slack is zero: one forgotten evening
+stops crediting. 72h absorbs two consecutive misses — an unstaffed weekend, one sick day. Not a
+week, because a stale rate cuts both ways and only one way is bounded: buy-cheap-deposit-high tops
+out at our Anthropic bill, while a rate that lags a rising token short-changes the depositor with
+no ceiling at all, and a launch week moves in multiples. `OVERRIDE_WARNING_AGE_MS` went 12h → 24h
+in the same pass: a full day of margin rather than half the window, since a warning that fires
+while the daily habit is still working is one an operator learns to skip.
+
+**The window is not a deadline — the rate can be written at any time.** Age is measured from the
+newest row in an append-only table, so `set-rate` resets the clock whenever it runs, and
+`checkRateChange` gates only the price ratio, never the frequency. Refresh on a chosen schedule and
+the window is never approached. Note the corollary for cadence: Friday morning to Monday morning is
+72h exactly, so a Mon/Wed/Fri habit sits precisely on the limit with no margin — daily is the
+cadence this window was sized for.
+
+The worker warns hourly (`rateStalenessWarning`), on its own timer rather than inside the deposit
+poll: the rate expires whether or not anyone is depositing, and the quiet week is the case worth
+catching. **When it does expire nothing is lost** — the indexer refuses to advance its cursor past
+an event it could not value, and every deposit replays once a rate is set.
 
 **The manual rate is a bridge, and its successor is already a seam.** `readPoolTwap()` returns
 null today, and `resolveTokenPrice` already prefers it over anything written by hand — marking it

@@ -201,12 +201,23 @@ directly.
 chain; a wrong one is not.
 
 **The rate's staleness window is two constants, not one** (split 2026-08-16).
-`MAX_OVERRIDE_AGE_MS = 24h` gates _crediting_; `MAX_DISPLAY_AGE_MS = 7 days` gates _display_.
+`MAX_OVERRIDE_AGE_MS = 72h` gates _crediting_; `MAX_DISPLAY_AGE_MS = 7 days` gates _display_.
 It was a single 7-day constant governing both, so narrowing it for a volatile launch would
 have blanked the public pricing page at the same moment billing stopped — and those two
 failures are not comparable. Same shape as the contract's `QUOTE_STALENESS` vs
 `EQUITY_STALENESS`: the strict threshold goes where value moves, not everywhere. Do not
 collapse them.
+
+**Why the crediting window is 72h and not 24h** (widened 2026-08-17). While the rate is
+written by hand, the operative number is not the window but the slack — `window − refresh
+interval`. At 24h with a daily refresh the slack is **zero**: forget once and crediting stops.
+72h absorbs two consecutive misses, which is what a weekend or one sick day looks like. It is
+not a week because a stale rate is not only our exposure: in the direction where ours is the
+low one the depositor is short-changed — the top-up card asks for tokens worth $60 and credits
+$20 — and that harm has no bound, unlike buy-cheap-deposit-high, whose ceiling is our
+Anthropic bill. Also worth knowing before anyone treats this as a deadline: **the rate can be
+set at any time**, since age is measured from the newest row, so writing it resets the clock.
+Refresh on a schedule and the window is never approached.
 
 That creates a state which did not exist before — a rate fresh enough to show and too old to
 charge against — so `TokenPrice` carries `usableForCredit`, and `TopUpCard` refuses to quote
@@ -214,7 +225,9 @@ an amount to send when it is false. That quote is a transaction instruction, not
 label: the deposit is valued at whatever rate is current when the indexer reaches it, so
 quoting from a rate we have already declined to bill at is a promise we would not keep.
 
-Expiry is not silent: the worker calls `rateStalenessWarning` hourly and warns from 12h. It
+Expiry is not silent: the worker calls `rateStalenessWarning` hourly and warns with 24h left —
+a full day of margin rather than half the window, because a warning that fires while a healthy
+daily refresh is still in effect is one an operator learns to skip. It
 runs on its own timer rather than inside the deposit poll deliberately — the rate expires
 whether or not anyone is depositing, and the quiet week is the case worth catching. When it
 does expire **nothing is lost**: the indexer refuses to advance its cursor past an event it
