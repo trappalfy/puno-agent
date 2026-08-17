@@ -1,0 +1,119 @@
+# The mainnet worker.
+#
+# **This file is not a copy of `fly.testnet.toml` and must not become one.** The
+# two differ in exactly the settings that decide whether real money moves, which
+# is why the product runs one worker process per chain rather than one worker
+# with a network switch. Copying the testnet file across is the specific mistake
+# that file warns about: its `DRY_RUN = "false"` is a statement about a throwaway
+# chain, and inherited here it would broadcast real trades from real vaults on
+# the first deploy.
+#
+# **Deploy from the repository root**, not from this directory:
+#
+#   fly deploy . --ha=false -c apps/agent/fly.mainnet.toml
+#
+# The build context is the working directory, and the Dockerfile copies the
+# lockfile and `packages/shared` from the root — it cannot build with
+# `apps/agent` as its context.
+#
+# **The paths below are measured from different places, and that is not a
+# mistake.** Measured by execution 2026-08-17 on the testnet app: `dockerfile` is
+# resolved against the directory holding *this file*, not against the working
+# directory, and not against whatever `fly deploy [WORKING_DIRECTORY]` is given.
+# Writing `apps/agent/Dockerfile` here makes flyctl look for
+# `apps/agent/apps/agent/Dockerfile` and report a missing file.
+# `release_command` is different again: it runs inside the image, so it is
+# relative to the image's WORKDIR.
+#
+# **Do not create the app with `fly launch`.** Run once on the testnet config it
+# rewrote `app` to a generated name and deleted every comment, preserving every
+# functional value — a file that still works and no longer says why. Use
+# `fly apps create`, which does not write a fly.toml at all.
+
+app = "puno-worker-mainnet"
+primary_region = "iad"
+
+[build]
+dockerfile = "Dockerfile"
+
+# Runs on its own machine before the new version takes traffic, so a deploy whose
+# migration fails does not half-replace a running worker. Relative to the image's
+# WORKDIR (/app/apps/agent), not to this file.
+#
+# **Both workers point at one database and both run this.** That is safe rather
+# than redundant — drizzle records what it has applied, so the second run is a
+# no-op — and it is worth keeping on both: whichever app deploys first after a
+# schema change migrates, so neither can start against a database it does not
+# match. What it does not survive is two deploys landing at the same instant, so
+# do not deploy both apps concurrently; the failure is a blocked release, which is
+# recoverable, but there is no reason to meet it.
+[deploy]
+release_command = "node --import tsx src/db/migrate.ts"
+
+[env]
+NETWORK = "mainnet"
+
+# **DRY_RUN is deliberately absent, and going live is the one line added at T-0.**
+#
+# `apps/agent/src/dry-run.ts` treats unset or empty as *simulate*, so as written
+# this app cannot broadcast a trade no matter how it is deployed. That is the
+# correct posture for every day before the token exists, and the reason it is
+# absent rather than set to "true": a committed "true" reads as a considered
+# setting for a live product, while absence reads as what it is — this app has
+# never been switched on.
+#
+# At cutover, uncomment the line below in a commit of its own, so the moment the
+# product started trading real money is a dated entry in the history rather than
+# a flag someone set from a shell:
+#
+#   DRY_RUN = "false"
+#
+# Do not skip it and rely on the default the other way round. Paper mode is not
+# a safe no-op once users exist: `runTick` ORs the process-wide flag with
+# `agents.dry_run`, so a worker in paper mode forces *every* agent to paper
+# regardless of what its owner chose, while the agent's own page still reports
+# the mode they picked. The user is billed for decisions, no trade is ever
+# broadcast, and nothing in the interface says so. That is the same class of hole
+# as the `agents.dry_run` column nothing read.
+
+# **TESTNET_PRICE_KEEPER is absent rather than "false".** It cannot run here even
+# if set: the keeper checks `isTestnet`, and `demoVault` is null on mainnet. A
+# "false" would suggest the switch is meaningful on this chain and invite someone
+# to try the other value.
+
+# **CREDITS_WATCHER_START_BLOCK is not here either**, because it is a value from a
+# single transaction rather than a property of the network: the block in which
+# `PunoCredits` was deployed. It goes in with `fly secrets set` at T-0 (step 7 of
+# the order in LAUNCH-CHECKLIST.md). Unset, the indexer starts from the current
+# head and every deposit made before the worker's first boot is never seen — the
+# credit is not lost, but it is not credited either until the cursor is moved by
+# hand. Note the cursor is keyed by chain id, not by contract, so a `PunoCredits`
+# redeploy on 4663 reuses the old cursor and this must be reconciled deliberately.
+
+# One machine, never two. `tickAllAgents()` walks every live agent with no lease
+# or lock, so a second instance ticks the same agents concurrently: double
+# screening charges against one balance, and two racing trades out of one vault.
+# On this chain both of those spend real money.
+#
+# **This block does not enforce that.** Fly provisions two machines by default and
+# there is no machine-count field in fly.toml — it is a deploy-time flag. Every
+# deploy must carry `--ha=false`:
+#
+#   fly apps create puno-worker-mainnet            # once, and it touches nothing here
+#   fly deploy . --ha=false -c apps/agent/fly.mainnet.toml
+[[vm]]
+size = "shared-cpu-1x"
+memory = "512mb"
+
+# AGENT_PRIVATE_KEY must derive to `NETWORKS.mainnet.serviceAgent`
+# (0x0aCd6ea59305B882FDC42e78b209Ec9bC39926a8). The worker proves the pair at boot
+# and refuses to start on a mismatch — `apps/agent/src/chain/serviceAgent.ts` —
+# in paper mode too, because discovering it at the moment someone goes live is the
+# expensive version of finding out.
+#
+# No [processes] block: the image's CMD already starts the worker as PID 1.
+#
+# No [http_service]: the worker serves nothing, it polls. Fly restarts the machine
+# when the process exits, which is the only liveness signal that exists today — a
+# wedged-but-running worker looks healthy. Worth a health endpoint before this
+# app carries paying users, which on this chain is every user.

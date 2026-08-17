@@ -90,9 +90,17 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       line 151 — three sources agreeing that a key exists for the address being funded, which is a
       stronger check than a test transfer, since ETH sent to an address we hold no key for is gone
       permanently and would not surface until T-0.
-- [ ] **Move the key off this laptop when hosting exists.** `.env.mainnet.local` is a holding
-      place, not a home. It belongs in the host's secret store as `AGENT_PRIVATE_KEY` alongside
-      `NETWORK=mainnet`; delete the local file once it is there.
+- [ ] **Move the key off this laptop.** `.env.mainnet.local` is a holding place, not a home. It
+      belongs in Fly's secret store as `AGENT_PRIVATE_KEY` alongside `NETWORK=mainnet`.
+      **Unblocked 2026-08-17 and doable before T-0**, which `DEPLOYMENT.md` used to forbid: the
+      concern behind that ban was running a mainnet worker with nothing to do, and `fly secrets set`
+      against an app with no machines runs nothing — it stages the value encrypted until a first
+      deploy that is not coming until T-0. Worth doing now rather than then, because a plaintext key
+      on the laptop that was found backdoored in August should not wait for the day that already has
+      twenty steps. **It is a move, not a copy:** deleting `.env.mainnet.local` is part of the step,
+      not tidying afterwards — until it is gone the key is in two places and exposure has grown.
+      Set it through `fly secrets import` on stdin, never as a command argument: PowerShell keeps
+      arguments in `ConsoleHost_history.txt`.
 
 #### How ETH gets onto 4663, established 2026-08-17
 
@@ -880,8 +888,9 @@ rather than in a host's secret store. Both are listed above under the ownership 
 ### Hosting — all three are live
 
 `DEPLOYMENT.md` is the runbook. Written and committed: `apps/agent/Dockerfile`, `.dockerignore`,
-`apps/agent/fly.testnet.toml`, and a `vercel.json` for each app. Still absent: CI and a worker
-health endpoint.
+`apps/agent/fly.testnet.toml`, `apps/agent/fly.mainnet.toml` (written 2026-08-17, validated by
+`fly config validate`, **no app deployed from it yet**), and a `vercel.json` for each app. Still
+absent: CI and a worker health endpoint.
 
 **Deployed 2026-08-16 and verified by fetching it:** Postgres on Neon with all thirteen tables,
 `https://puno-agent-web.vercel.app` serving, and `/api/pricing` returning the rate written by
