@@ -56,8 +56,8 @@ PUNO/USD and there must not be one for now.
 | **decisions** | the user's credit balance              | a stored amount must not fall when the token rises                    |
 | **USD**       | vault NAV, positions, P&L, risk limits | the vault holds USDG and equities, no PUNO; limits go on-chain in USD |
 
-The balance is **not** shown in PUNO, and this is deliberate. Deposit 20,000,000 PUNO at
-$0.000001, PUNO doubles, and a PUNO-denominated balance reads 10,000,000 — same value, same
+The balance is **not** shown in PUNO, and this is deliberate. Deposit 2,000,000 PUNO at
+$0.00001, PUNO doubles, and a PUNO-denominated balance reads 1,000,000 — same value, same
 number of decisions, but it looks like half the money was taken, and it hits hardest exactly the
 people most invested in PUNO rising. `decisionsRemaining` only moves when the agent has done
 something. Same argument as the USD-denominated ledger below, seen from the user's side.
@@ -69,11 +69,18 @@ route carries no per-account data and does not apply the BYOK discount, which is
 an account. Both site sections fall back to USD when the fetch fails or no rate is set: a
 price a visitor cannot pay in still beats a blank.
 
-**Quoting in PUNO makes numbers long.** At the working rate of **$0.000001** the table is
-10K / 500K / 250K for screen/decision/trade and 5M / 20M / 50M for the deposits — a $50 top-up
-is fifty million PUNO. That is why `formatTokensCompact` exists and why the top-up chips and the
-pay button use it: three full figures side by side is the button overflow this UI was already
-fixed for once. The exact figure stays on the "You send" row, which has a line to itself.
+**Quoting in PUNO makes numbers long.** At the working rate of **$0.00001** (raised from
+$0.000001 on 2026-08-17, for readability alone) the table is 1K / 50K / 25K for
+screen/decision/trade and 500K / 2M / 5M for the deposits. One order of magnitude shorter than
+before, when a $50 top-up read as fifty million PUNO — but still long enough that
+`formatTokensCompact` exists and the top-up chips and the pay button use it: three full figures
+side by side is the button overflow this UI was already fixed for once. The exact figure stays on
+the "You send" row, which has a line to itself.
+
+The rate is a **preview of a decision, not a forecast.** We seed the pool, so
+`price = USDG ÷ PUNO in pool`; "more realistic" does not apply to a number we choose. Changing it
+for how the price table reads is legitimate and changing it to be closer to some true value is a
+category error.
 
 The rate has a **hard arithmetic floor around $5e-9**: `usdToTokens` computes
 `(usd / price) * 1e6` as a float before reaching bigint, and that passes

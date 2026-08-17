@@ -138,7 +138,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 cd C:\Users\chaiz\Desktop\puno-agent-main
 $env:DATABASE_URL = 'СТРОКА_ИЗ_NEON_ЦЕЛИКОМ'
 pnpm.cmd --filter @puno/agent db:migrate
-pnpm.cmd --filter @puno/agent set-rate -- 0.000001 --note "testnet launch"
+pnpm.cmd --filter @puno/agent set-rate -- 0.00001 --note "testnet launch"
 Remove-Item Env:\DATABASE_URL
 ```
 
@@ -199,7 +199,8 @@ pnpm.cmd --filter @puno/agent set-rate -- <цена> --note "почему"
 Remove-Item Env:\DATABASE_URL
 ```
 
-**Какую цену вписывать.** На тестнете — ту же, `0.000001`: токен там мок, цены у него нет. **На
+**Какую цену вписывать.** На тестнете — ту же, `0.00001` (поднято с `0.000001` 2026-08-17 ради
+читаемости чисел, не ради точности): токен там мок, цены у него нет. **На
 мейннете повторять прошлое число нельзя** — посмотрите текущую цену в пуле PUNO/USDG и впишите её.
 Несвежее число бьёт по вкладчику: карточка попросит отправить токенов на $60 и начислит $20, а
 доказать это он сможет только нашим же логом. Прочитайте таблицу предпросмотра перед записью —

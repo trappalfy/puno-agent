@@ -378,7 +378,7 @@ entering the picture, whichever comes first. Moving is one `transferOwnership` p
 ### Business decisions that are not config values
 
 Settled 2026-08-16 and no longer tracked here: **the launch rate and the supply**. The owner is
-handling both; $0.000001 is the working rate the product is built and previewed against, to be
+handling both; $0.00001 is the working rate the product is built and previewed against, to be
 replaced with the final one when it exists. The reasoning behind the number is kept under
 _Choosing the launch price_ below, because the reasoning is what a later reader will need — the
 decision itself is not ours.
@@ -408,21 +408,31 @@ depending on how you take it, and neither is a reference for a payment token bac
 liability. Noxa itself stopped launching on 11 July and went dark, so the venue is an open
 question too.
 
-**The owner's working rate is $0.000001**, set 2026-08-16 (from an earlier $0.0004). Every number
-in the product still lands round:
+**The owner's working rate is $0.00001**, raised from $0.000001 on 2026-08-17 (and that from an
+earlier $0.0004). Every number in the product still lands round:
 
-| Rate PUNO     | screen $0.01 | decision $0.50 | trade $0.25 | $20 top-up     |
-| ------------- | ------------ | -------------- | ----------- | -------------- |
-| $0.01         | 1            | 50             | 25          | 2,000          |
-| $0.001        | 10           | 500            | 250         | 20,000         |
-| $0.0004       | 25           | 1,250          | 625         | 50,000         |
-| **$0.000001** | **10,000**   | **500,000**    | **250,000** | **20,000,000** |
+| Rate PUNO    | screen $0.01 | decision $0.50 | trade $0.25 | $20 top-up    |
+| ------------ | ------------ | -------------- | ----------- | ------------- |
+| $0.01        | 1            | 50             | 25          | 2,000         |
+| $0.001       | 10           | 500            | 250         | 20,000        |
+| $0.0004      | 25           | 1,250          | 625         | 50,000        |
+| **$0.00001** | **1,000**    | **50,000**     | **25,000**  | **2,000,000** |
+| $0.000001    | 10,000       | 500,000        | 250,000     | 20,000,000    |
+
+**The 2026-08-17 change was for readability and nothing else, and the distinction matters.** The
+launch price is _chosen_ — we seed the pool, so `price = USDG ÷ PUNO in pool` — which means "this
+rate is more realistic" is a category error. What is real is that one order of magnitude shortens
+every figure a user reads: a $50 top-up went from fifty million PUNO to five million.
+
+`set-rate` refused it until `--force`, correctly: the guard is 4× and this was exactly 10×, which
+is the shape of a dropped zero. The guard cannot tell an intended factor of ten from a typo'd one —
+only a human can, which is the entire reason it stops and asks rather than deciding.
 
 Above about $0.01 the cheapest action falls under 1 PUNO and the token reads as more expensive
 than it is. There is no matching wall at the small end — an earlier note here guessed one at
-$0.00001 and that guess was wrong: `formatTokensCompact` renders the whole table as
-10K / 500K / 250K / 5M / 20M / 50M, and every figure is still a round multiple of the smallest
-action. Supply follows from the FDV: at $0.000001, a $250k FDV is 250 billion tokens.
+$0.00001 and that guess was wrong, which the move to exactly that rate now demonstrates rather
+than argues. Supply follows from the FDV, and it moves with the price: at $0.00001 a $250k FDV is
+25 billion tokens, where at $0.000001 it was 250 billion.
 
 **The real floor is arithmetic, and it is much lower.** `usdToTokens` computes
 `(usd / price) * 1e6` as a float before reaching bigint, and that product passes
