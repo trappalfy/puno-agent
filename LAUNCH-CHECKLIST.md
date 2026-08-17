@@ -96,9 +96,12 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       deriving it to `0x389AA9c0…0adD`.
       `NETWORK` was deliberately **not** set as a secret: it is in `fly.mainnet.toml`'s `[env]`, and
       a Fly secret overrides `[env]`, which would leave the committed value dead while still reading
-      as authoritative. `DATABASE_URL`, `ANTHROPIC_API_KEY` and `ENCRYPTION_KEY` were left out too —
-      they matter only once the app deploys, and adding them now would be four more copies of
-      secrets for no gain.
+      as authoritative. `ANTHROPIC_API_KEY` followed on 2026-08-17 — its Fly digest matches the
+      testnet app's exactly, which is how the two are known to be the same key without either being
+      read. `DATABASE_URL` is the last one and must be the Neon string; the same digest trick proves
+      it. **`ENCRYPTION_KEY` is not on the list, and an earlier version of this file said it was** —
+      see the BYOK finding below for why the worker does not need it and why that is a problem
+      rather than a convenience.
       **`DEPLOYMENT.md` used to forbid this outright and the ban was too wide.** Its concern was
       running a mainnet worker with nothing to do, which still holds; but `fly secrets import`
       against an app with no machines runs nothing, so the key could move while mainnet stayed
@@ -151,6 +154,40 @@ target; then read the target's balance **from the chain** before sending the res
 the control that actually works — a clipboard hijacker substitutes what you copy, so comparing what
 you pasted against what you meant to paste compares two copies of the same substituted string,
 while a balance read against the address in `config.ts` cannot be fooled by it.
+
+### BYOK-1 — the user's own Anthropic key is stored, never used, and waives the charge
+
+**Found 2026-08-17 while listing the mainnet worker's secrets, and it was not in this file.** Same
+class as the `dry_run` hole and B0: a path that simply does not exist.
+
+Four facts, all read from the code:
+
+1. `apps/web/src/app/api/billing/byok/route.ts:42` encrypts the user's key into
+   `accounts.anthropic_api_key_encrypted`.
+2. `apps/agent/src/quota/service.ts:33` reads that column as `usesOwnKey: !!row?.key` — presence
+   only, never the value.
+3. `priceFor` then returns **0** for `screen` and `decision` whenever `usesOwnKey`.
+4. `apps/agent/src/llm/client.ts:14` builds one `Anthropic` client from `config.anthropicApiKey`.
+   Nothing in `apps/agent` or `packages/shared` decrypts anything; `ENCRYPTION_KEY` appears only in
+   `apps/web`.
+
+So a BYOK user is charged nothing for model calls **and those calls run on our key**. `CLAUDE.md`
+states the intent — "a user with their own Anthropic key pays nothing for `screen`/`decision`" —
+on the unstated premise that their key pays for it. Ours does. At ~$0.0097–$0.0245 a decision and
+~$0.005 a screen, every BYOK account is a straight subtraction from margin, and saving any accepted
+key in settings turns it on.
+
+**Not a launch blocker and not urgent today**: mainnet has no users, and on testnet the exposure is
+our own testing. It opens exactly when the product starts working, which is the worst time to find
+it, so it is written down now rather than discovered from an Anthropic bill.
+
+The fix is not a one-liner and should not be rushed into T-0. It needs the decrypt helper moved out
+of `apps/web/src/lib/crypto.ts` into `packages/shared`, `ENCRYPTION_KEY` added to the worker's
+config and to both Fly apps, and a per-account Anthropic client — the current one is a module-level
+singleton, so a second key needs a cache keyed by account rather than a swap. It also needs a
+decision about what happens when a user's key is rejected by Anthropic mid-tick: fall back to ours
+and charge, or fail the tick. Until then the honest short-term option is to stop waiving the charge,
+which is one line in `priceFor` and makes the product correct if less generous.
 
 ### SEC-1 — anyone could register anyone else's vault as their own
 
