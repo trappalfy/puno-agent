@@ -448,15 +448,34 @@ single-sided Uniswap V3 pattern this chain's launchpads use puts **no USDG in th
 until someone buys, so on day one there is nothing to sell revenue into. That is exactly the
 liability the treasury-conversion item above names, arriving through a different door.
 
-**Set `PUNO_MIN_DEPOSIT` deliberately low — around a $1 equivalent, not $5.** There are two
-minimums and they drift apart with the market. `MIN_DEPOSIT_USD = 5.0` is display only; there is
-no server-side check, verified. `PunoCredits.minDeposit` is raw token units and is the hard
-on-chain gate. Denominate the on-chain one at $5 and a 5× price rise makes it a $25 floor while
-the UI still promises $5, and deposits start reverting with `PunoCredits: below minimum` — fixable
-only by a transaction from the cold owner wallet. At a $1 equivalent it does the job it is
-actually for, keeping out dust that costs more to index than it is worth, and the $5 product
-minimum stays where it belongs, in the interface. A price rise then locks nobody out, and a fall
-just admits slightly smaller deposits, which is harmless.
+**`PUNO_MIN_DEPOSIT` = `500000000000000000000000`** — 500,000 PUNO, a $5 equivalent at the working
+rate of $0.00001. **Chosen by the owner on 2026-08-17, against the recommendation recorded below,
+which is kept because the failure it describes is the one to expect.**
+
+There are two minimums and they drift apart with the market. `MIN_DEPOSIT_USD = 5.0` is display
+only; there is no server-side check, verified. `PunoCredits.minDeposit` is raw token units and is
+the hard on-chain gate, fixed in tokens forever.
+
+The recommendation was a $1 equivalent (100,000 PUNO). At a $5 equivalent the two minimums agree
+exactly today and diverge on the first upward tick: `TopUpCard` quotes `$5 ÷ current rate`, which is
+under 500,000 tokens as soon as the rate exceeds $0.00001, and the deposit reverts with
+`PunoCredits: below minimum`. **The failure fires precisely when the token appreciates**, it hits
+the cheapest preset first, and $20 and $50 keep working until 4× and 10× respectively.
+
+Two things make this a reasonable bet rather than a mistake. `setMinDeposit` is `onlyOwner` and the
+owner is currently a browser wallet, so the fix is one cheap transaction rather than a cold-wallet
+ceremony — that changes if ownership moves to a multisig first, and then this should be lowered
+_before_ the handover. And the product minimum is unaffected either way: $5 is the interface rule
+and stays $5 regardless of what the chain enforces.
+
+**Revisit trigger:** the first sustained rate above $0.00001, or the ownership handover, whichever
+comes first. Watch for `PunoCredits: below minimum` on a $5 top-up — that is the symptom, and it
+will look like a wallet problem to whoever hits it.
+
+**The units trap is separate and worse.** That value is 24 digits, and the only guard in
+`DeployPunoCredits` is `require(minDeposit > 0)`. Writing `500000` — the number a human would say
+out loud — sets a floor of 0.0000000000005 PUNO and passes every check. The figure is recorded here
+and in `.env` precisely so nobody retypes it on the day.
 
 ### Measurement still owed
 
