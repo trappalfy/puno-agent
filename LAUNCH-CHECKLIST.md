@@ -900,22 +900,49 @@ original wording was.
 
 #### The order on the day
 
-1. The CA arrives. **Read the address back visually** before it goes into any command — the
-   clipboard rule, and this is the one moment it exists for.
-2. Read from chain: `name()`, `symbol()`, `decimals()`, `totalSupply()`.
-3. `pnpm --filter @puno/agent set-rate -- <price> --note "launch"`. Before the deploy, not after:
-   crediting fails closed without it, and the failure is silent until the first deposit.
-4. `DeployPunoCredits.s.sol` with `PUNO_TOKEN_ADDRESS` / `PUNO_TREASURY` / `PUNO_OWNER` /
-   `PUNO_MIN_DEPOSIT`. **Record the deployment's block number** — step 7 needs it.
-5. The cold wallet calls `acceptOwnership()`. Verify with `cast call <credits> "owner()"`, never
-   from the deploy log — the log says what was requested, the call says what is true.
-6. **One commit** to `config.ts`: `punoToken`, `punoCredits`, and `punoDecimals` if step 2 said
-   anything other than 18. `vaultFactory` is already there — `0x57b35e8D…a679`, deployed
-   2026-08-17, so this step is one field short of what it used to be. Push; the
-   hosts rebuild themselves.
-7. `CREDITS_WATCHER_START_BLOCK` = the block from step 4, then start the mainnet worker.
-8. `preflight` — every row green.
-9. Verify both contracts on Blockscout.
+**Rewritten 2026-08-17, once everything preparable was prepared.** Nothing here is optional; the
+optional work is elsewhere in this file and none of it belongs in this hour.
+
+**Two things are needed from the owner, not one.** The contract address, and **the launch price** —
+because `PUNO_MIN_DEPOSIT` is a token count and the one recorded in `.env`
+(`500000000000000000000000` = 500,000 PUNO) is $5 only at $0.00001. Launch ten times higher and the
+same number is a **$50** floor while the interface offers a $5 button. Recompute it before the
+deploy; `setMinDeposit` is `onlyOwner`, so getting it wrong costs a transaction rather than a
+redeploy, but there is no reason to spend one.
+
+**Two of these steps cannot be done by the agent** and are marked ⟨owner⟩: the Neon `set-rate`,
+because the connection string is not on this machine and should not be, and `acceptOwnership()`,
+because only the owning address can call it.
+
+The critical path is 1 → 3 → 4 → 5 → 6 → 7. Step 2 runs beside it and blocks nothing until the
+first deposit.
+
+1. **Verify the token.** Read the address back visually — the clipboard rule exists for this
+   moment. Then from chain: bytecode present, `name()`, `symbol()`, `decimals()`, `totalSupply()`,
+   and that the address is neither incident address. **`decimals()` is the one that matters**: it
+   is checked nowhere else, and a mismatch mis-credits every deposit by orders of magnitude, in the
+   direction of giving the service away.
+2. ⟨owner⟩ **`set-rate` against Neon** at the launch price. Needs `--force` if it moves more than 4×
+   from $0.00001. Must land before the first deposit; the failure is silent until then.
+3. **Recompute `PUNO_MIN_DEPOSIT`** at the launch price and put it in `.env`. Raw units, 24-ish
+   digits, computed and never typed — the deploy script only checks `> 0`.
+4. **`DeployPunoCredits.s.sol`** with `PUNO_TOKEN_ADDRESS` / `PUNO_TREASURY` / `PUNO_OWNER` /
+   `PUNO_MIN_DEPOSIT`. **Record the block number** — step 7 needs it. This is the only irreversible
+   step, which is why step 1 comes first.
+5. ⟨owner⟩ **`acceptOwnership()`** from `0xef0486…Da32bA`. Verify with `cast call <credits>
+"owner()"`, never from the deploy log. `preflight` fails while this is pending, by design.
+6. **One commit** to `config.ts`: `punoToken`, `punoCredits`, and `punoDecimals` only if step 1 said
+   anything other than 18. `vaultFactory` is already there — `0x57b35e8D…a679`. Push; Vercel
+   rebuilds both apps by itself.
+7. **Start the mainnet worker.** `fly secrets set CREDITS_WATCHER_START_BLOCK=<block from step 4>`,
+   then uncomment `DRY_RUN = "false"` in `fly.mainnet.toml` as its own commit, then
+   `fly deploy . --ha=false -c apps/agent/fly.mainnet.toml`. All three secrets are already staged.
+   **`--ha=false` on every deploy** — two machines double-charge one balance and race two trades out
+   of one vault.
+8. **`preflight` against mainnet — every row green.** This is the gate, not the deploy log.
+
+Not on the critical path and deliberately after: verifying both contracts on Blockscout. It costs
+nothing and matters for credibility at listing, but nothing depends on it.
 
 Failure modes worth knowing before they happen:
 
