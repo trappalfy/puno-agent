@@ -80,14 +80,51 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       point, given how the August incident worked. Checked distinct from the old deployer, the
       attacker, the current deployer and the testnet agent.
       **Two things still owed on it:**
-- [ ] **Fund it with ETH on 4663 before the first live mainnet vault.** It pays gas on every
-      `executeTrade` and holds 0 today. Measured floor: the real testnet trade burned 260,225 gas;
-      at the mainnet gas price observed on 2026-08-15 (28,226,000 wei) that is ~0.0000073 ETH a
-      trade, so 0.01 ETH covers well over a thousand. Treat it as a floor, not a forecast — that
-      trade went through `MockRouter`, and a real Uniswap V3 swap costs more.
+- [x] **Funded 2026-08-17 — 0.0025 ETH**, read back from chain, and `preflight --mainnet` shows the
+      row `PASS`. It pays gas on every `executeTrade`. At the gas price measured that day
+      (20,190,000 wei) the real testnet trade's 260,225 gas is 0.0000053 ETH, so 0.0025 buys ~475
+      trades — or **~158** if a real Uniswap V3 swap costs three times a `MockRouter` fill, which is
+      the number to plan against. Runway scales inversely with gas price: a 10× rise makes that 16,
+      so the figure to watch is the price, not the balance. `preflight` prints the balance every run.
+      Before sending, the key in `.env.mainnet.local` was derived and matched against `config.ts`
+      line 151 — three sources agreeing that a key exists for the address being funded, which is a
+      stronger check than a test transfer, since ETH sent to an address we hold no key for is gone
+      permanently and would not surface until T-0.
 - [ ] **Move the key off this laptop when hosting exists.** `.env.mainnet.local` is a holding
       place, not a home. It belongs in the host's secret store as `AGENT_PRIVATE_KEY` alongside
       `NETWORK=mainnet`; delete the local file once it is there.
+
+#### How ETH gets onto 4663, established 2026-08-17
+
+Nothing in this repo recorded it, and the answer is not the one the testnet note implies. Testnet
+ETH cannot be bridged and must come from the faucet; **mainnet is the opposite — there is no
+faucet, and the bridge is the only way in.**
+
+Robinhood Chain is an **Arbitrum Orbit L2 settling to Ethereum**, so its canonical bridge is
+Arbitrum's:
+`https://portal.arbitrum.io/bridge?destinationChain=robinhood-chain&sourceChain=ethereum`.
+Confirmed against `docs.robinhood.com/chain/bridging` rather than any of the several SEO
+"RobinBridge"-style sites a search returns first — in a repo whose incident was an address
+substitution, a look-alike bridge domain is the same attack with a nicer front end.
+
+Four things measured on the way through, none of them guessable:
+
+- **The deposit keeps ~0.0001 ETH.** 0.0038 sent, **0.003694736** arrived — the difference pays the
+  retryable ticket that executes the deposit on L2. Budget for it; it is not a fee schedule error.
+- **L1 gas was 0.09 gwei** (two independent RPCs agreeing), making the deposit itself ~0.0000093
+  ETH. An earlier assumption here that L1 gas would dominate small transfers was wrong by two
+  orders of magnitude, and it changed the advice: there is no reason to over-bridge.
+- **The exit is 7 days**, challenge period plus a manual claim on Ethereum. In at 10 minutes, out at
+  a week — which is the real argument against parking a large balance on 4663, not the gas.
+- **Robinhood's own app cannot send ETH onto Robinhood Chain.** Its support page lists the chain for
+  transfers but never as a withdrawal destination, and neither official page describes that path.
+
+The safe funding order, and the reason for each step: bridge to **your own address** with the
+recipient field untouched, so no address is typed anywhere; then a **0.0001 test transfer** to the
+target; then read the target's balance **from the chain** before sending the rest. That last step is
+the control that actually works — a clipboard hijacker substitutes what you copy, so comparing what
+you pasted against what you meant to paste compares two copies of the same substituted string,
+while a balance read against the address in `config.ts` cannot be fooled by it.
 
 ### SEC-1 — anyone could register anyone else's vault as their own
 
@@ -512,13 +549,13 @@ A 403 or 401 must resolve **immediately**, not after a retry storm. Both are ter
 `DeployMainnet` **simulates cleanly against the live mainnet RPC.** Run from `contracts/` with
 `DEPLOYER_PRIVATE_KEY` in the environment and no `--broadcast`:
 
-| Fact                          | Value                                                             |
-| ----------------------------- | ----------------------------------------------------------------- |
-| Chain id seen                 | 4663                                                              |
-| Gas estimated                 | 3,483,526 at 0.056 gwei                                           |
-| ETH required (forge estimate) | **0.000196** — expect ~0.00008 real; forge padded 2.4× on testnet |
-| `PunoCredits`                 | correctly skipped, `PUNO_TOKEN_ADDRESS` unset                     |
-| Deployer balance on 4663      | **0 ETH — this is the only thing blocking the broadcast**         |
+| Fact                          | Value                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| Chain id seen                 | 4663                                                                        |
+| Gas estimated                 | 3,483,526 at 0.056 gwei                                                     |
+| ETH required (forge estimate) | **0.000196** — expect ~0.00008 real; forge padded 2.4× on testnet           |
+| `PunoCredits`                 | correctly skipped, `PUNO_TOKEN_ADDRESS` unset                               |
+| Deployer balance on 4663      | **0.0011 ETH as of 2026-08-17** — 11× the measured need; no longer blocking |
 
 Two things this settled that were open questions:
 
