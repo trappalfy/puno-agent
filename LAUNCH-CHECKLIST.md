@@ -90,19 +90,35 @@ new` into `.env.mainnet.local` (gitignored by the `.env.*.local` rule, confirmed
       line 151 — three sources agreeing that a key exists for the address being funded, which is a
       stronger check than a test transfer, since ETH sent to an address we hold no key for is gone
       permanently and would not surface until T-0.
-- [ ] **Move the key off this laptop.** `.env.mainnet.local` is a holding place, not a home. It
-      belongs in Fly's secret store as `AGENT_PRIVATE_KEY`. Not `NETWORK` — that is in
-      `fly.mainnet.toml`'s `[env]`, and a Fly secret overrides `[env]`, which would make the
-      committed value dead while still reading as authoritative.
-      **Unblocked 2026-08-17 and doable before T-0**, which `DEPLOYMENT.md` used to forbid: the
-      concern behind that ban was running a mainnet worker with nothing to do, and `fly secrets set`
-      against an app with no machines runs nothing — it stages the value encrypted until a first
-      deploy that is not coming until T-0. Worth doing now rather than then, because a plaintext key
-      on the laptop that was found backdoored in August should not wait for the day that already has
-      twenty steps. **It is a move, not a copy:** deleting `.env.mainnet.local` is part of the step,
-      not tidying afterwards — until it is gone the key is in two places and exposure has grown.
-      Set it through `fly secrets import` on stdin, never as a command argument: PowerShell keeps
-      arguments in `ConsoleHost_history.txt`.
+- [x] **Moved off the laptop 2026-08-17.** `AGENT_PRIVATE_KEY` is staged in `puno-worker-mainnet`'s
+      Fly secrets (digest `205a98d1a02c5ac3`, status `Staged`), the app has **no machines**, and
+      `.env.mainnet.local` is deleted. The only key left in `.env` is the testnet one, confirmed by
+      deriving it to `0x389AA9c0…0adD`.
+      `NETWORK` was deliberately **not** set as a secret: it is in `fly.mainnet.toml`'s `[env]`, and
+      a Fly secret overrides `[env]`, which would leave the committed value dead while still reading
+      as authoritative. `DATABASE_URL`, `ANTHROPIC_API_KEY` and `ENCRYPTION_KEY` were left out too —
+      they matter only once the app deploys, and adding them now would be four more copies of
+      secrets for no gain.
+      **`DEPLOYMENT.md` used to forbid this outright and the ban was too wide.** Its concern was
+      running a mainnet worker with nothing to do, which still holds; but `fly secrets import`
+      against an app with no machines runs nothing, so the key could move while mainnet stayed
+      closed by construction. Worth doing now rather than at T-0: a plaintext key on the laptop that
+      was found backdoored in August should not wait for the day that already has twenty steps.
+      Set over **stdin**, never as a command argument — PowerShell keeps arguments in
+      `ConsoleHost_history.txt` — and `\r` was stripped explicitly, since a CRLF file would have put
+      a trailing carriage return inside the secret and the failure would not have surfaced until the
+      worker's first boot.
+      **The recovery copy is proven, not assumed.** A Fly secret cannot be read back, so nothing
+      short of a successful boot proves the stored value, and that boot is at T-0. So the owner wrote
+      the key on paper, then typed it back from paper into a scratch file which derived to
+      `0x0aCd6ea59305B882FDC42e78b209Ec9bC39926a8` — the configured address. Eyeballing paper against
+      a screen would not have caught a single wrong character in the middle; deriving the address
+      does. Both scratch file and original are now deleted.
+      Why this key earns that care: it signs `executeTrade` for **every** mainnet vault, and vaults
+      are armed with its address at creation. Losing it means every vault owner must call `setAgent`
+      themselves — free today at zero vaults, unfixable from our side once there are users. A leak is
+      serious but bounded: `withdraw` is owner-only, so a stolen key can force trades inside each
+      vault's policy and cannot take funds out.
 
 #### How ETH gets onto 4663, established 2026-08-17
 
