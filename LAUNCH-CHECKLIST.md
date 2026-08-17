@@ -470,8 +470,8 @@ dev, build, restart dev, or delete `apps/web/.next` to recover.
 | `pnpm -r typecheck`                  | 4/4 projects clean                     |
 | `pnpm lint`                          | clean                                  |
 | `pnpm format:check`                  | clean — a real signal since 2026-08-15 |
-| `pnpm test`                          | **196** — shared 72, agent 80, web 44  |
-| `forge test -vv` (from `contracts/`) | **80/80**                              |
+| `pnpm test`                          | **281** — shared 94, agent 143, web 44 |
+| `forge test -vv` (from `contracts/`) | **91/91**                              |
 | `pnpm -r build`                      | both apps build; `web` emits 21 routes |
 
 If a count is _lower_ than the number above, tests were deleted or skipped — investigate before
@@ -593,7 +593,7 @@ an external party.
 | #     | Item                                                                       | Whose  | State                               |
 | ----- | -------------------------------------------------------------------------- | ------ | ----------------------------------- |
 | ~~1~~ | ~~Dedicated **mainnet worker key**~~ — `0x0aCd6ea5…`, in `serviceAgent`    | ours   | **Done 2026-08-15**                 |
-| 2     | **Hosting** — nothing is deployed anywhere; see below                      | theirs | Not started                         |
+| ~~2~~ | ~~**Hosting**~~ — web, site and the testnet worker all live; see below     | both   | **Done 2026-08-16/17**              |
 | 3     | **PUNO** exists, with a decided USD rate and a treasury conversion routine | theirs | Not started                         |
 | 4     | `DeployMainnet` run; `vaultFactory`/`punoCredits` written into `config.ts` | both   | Blocked on 3                        |
 | 5     | Multisig created and calling `acceptOwnership()` on `PunoCredits`          | theirs | Not started                         |
@@ -653,15 +653,30 @@ like a run against Neon — the same class of mistake `set-rate` avoids by print
 
 #### What its first run found, 2026-08-17
 
-Against testnet: 11 pass, 1 fail, 1 skip, 2 n/a. The failure is real and was not otherwise visible.
+Against testnet: 11 pass, 1 fail, 1 skip, 2 n/a. The failure was real and was not otherwise visible.
 
-- [ ] **`serviceAgent` `0x389AA9c0…0adD` holds ~0.0000016 ETH on testnet** — verified independently
-      with `cast balance`. The hosted worker runs with `DRY_RUN=false` and the price keeper
-      broadcasts `setAnswer` roughly every 20 minutes at ~3e-7 ETH a call, so the balance is being
-      spent as it sits. When it empties, mock feeds go stale within the hour and the demo agent
+- [x] **`serviceAgent` `0x389AA9c0…0adD` held ~0.0000016 ETH on testnet — refilled 2026-08-17**, now
+      0.010001 ETH, verified independently with `cast balance`. The hosted worker runs with
+      `DRY_RUN=false` and the price keeper broadcasts `setAnswer` on a timer, so the balance was
+      being spent as it sat. When it empties, mock feeds go stale within the hour and the demo agent
       declines to trade — the failure CLAUDE.md calls the worst possible first impression, and it
       arrives systematically rather than occasionally. Top up from
       `https://faucet.testnet.chain.robinhood.com`; testnet ETH cannot be bridged in.
+      **Measured cost, since the estimate above was a guess:** the delta between two balance reads
+      was exactly `418560000000` wei — a clean gas × price product, so one keeper transaction at
+      **4.1856e-7 ETH**. 0.01 ETH is therefore ~24,000 transactions. Do not convert that to days
+      from two samples; the balance was nearly empty for part of the window, so the observed
+      frequency is a floor rather than the rate.
+- [x] **The remaining SKIP closed 2026-08-17.** It and the deployer-gas n/a were one unset variable
+      seen twice: `DEPLOYER_ADDRESS` was in neither `.env` nor `.env.example`, so a command that
+      refuses to go green without it was asking for something the template never mentioned. Now
+      documented, with the instruction to **derive it rather than type it** —
+      `cast wallet address --private-key` is the one path a clipboard substitution cannot reach.
+      Testnet reads **14 pass, 0 fail, 0 skip, 1 n/a — READY**.
+      Two caveats that verdict does not cover. The rate and ledger rows were read from
+      `localhost/puno`, not Neon, which is exactly why the banner prints the host. And `preflight` is
+      deliberately **not** wired into `fly.testnet.toml`'s `release_command`: `DEPLOYER_ADDRESS` is
+      not a Fly secret, so it would SKIP, exit 1, and block every deploy of a worker that was fine.
 
 Writing the checks also turned up a message that contradicted itself: a balance one wei under the
 floor printed as "holds 0.001000 ETH, under the 0.001 floor", because `toFixed` rounds. Balances are
@@ -825,7 +840,7 @@ the audit does nothing to reduce it.
 gas on every `executeTrade`, and its key still lives in `.env.mainnet.local` on the dev laptop
 rather than in a host's secret store. Both are listed above under the ownership section.
 
-### Hosting — the web app is live, the worker is not
+### Hosting — all three are live
 
 `DEPLOYMENT.md` is the runbook. Written and committed: `apps/agent/Dockerfile`, `.dockerignore`,
 `apps/agent/fly.testnet.toml`, and a `vercel.json` for each app. Still absent: CI and a worker
@@ -852,7 +867,7 @@ were not restarted. A migration that failed would have left the running worker i
 than half-replacing it.
 
 **This closes the rate-expiry gap by itself** — `rateStalenessWarning` runs inside this process
-and warns from 12 h, so the rate can no longer expire unannounced.
+and warns with 24 h of the 72 h window left, so the rate can no longer expire unannounced.
 
 Two things were caught by reading rather than by running, and both would have failed the first
 `fly deploy`:
@@ -860,17 +875,27 @@ Two things were caught by reading rather than by running, and both would have fa
 - `tsx` was in `devDependencies` while `start` is `tsx src/main.ts`. An image built with `--prod`
   builds cleanly and dies on boot with "command not found". Moved to `dependencies`, where it
   belongs — `@puno/shared` ships TypeScript source, so tsx is this app's runtime, not a build tool.
-- Fly's build context is the working directory, so `dockerfile = "Dockerfile"` inside
-  `apps/agent/` would not have resolved. The path is root-relative and the deploy runs from the
-  repository root.
+- **Corrected 2026-08-17, by execution.** This bullet used to say the `dockerfile` path is
+  root-relative because the build context is the working directory. That is backwards on the half
+  that matters, and following it produces
+  `apps/agent/apps/agent/Dockerfile not found` — which is how the first `fly deploy` actually
+  failed. The two paths in one command are measured from **different places**: the build context is
+  the working directory (hence `fly deploy .` from the repository root, so the lockfile and
+  `packages/shared` are in scope), while `dockerfile` inside `fly.testnet.toml` resolves against
+  **the directory holding that file**. So it reads `Dockerfile`, not `apps/agent/Dockerfile`. The
+  positional `WORKING_DIRECTORY` argument does not change the second one. Fly's own docs read the
+  other way; the observed behaviour wins.
 
-Checked 2026-08-15 and still true otherwise: `docker-compose.yml` starts **Postgres only**, and
-the web app, the database and the worker all run on this laptop.
+Checked 2026-08-15 and still true: `docker-compose.yml` starts **Postgres only**. The laptop no
+longer hosts anything load-bearing — Neon holds the database and the worker runs on Fly — though a
+local worker and both dev servers are still routinely up for development, which is why `preflight`
+prints the database host.
 
-That makes "public launch" blocked on infrastructure that does not exist, and it is worth doing
-before the rest rather than after, for one reason: the largest product gap is the absence of a
-public track record, and it closes only by accumulating history. Every day the worker is not
-running somewhere that stays on is a day missing from that record.
+The reason this was worth doing before the token rather than after: the largest product gap is the
+absence of a public track record, and it closes only by accumulating history. Every day the worker
+is not running somewhere that stays on is a day missing from that record. **As of 2026-08-16 that
+clock is running** — which is also why the free-tier runs on `/app/try` matter now rather than at
+T-0, since `/demo` is where the accumulated record becomes visible to a stranger.
 
 Also load-bearing once real users exist: `tickAllAgents()` walks every live agent **sequentially**
 inside one `TICK_INTERVAL_MS` window. Fine at today's count; at some N a pass outruns its own
