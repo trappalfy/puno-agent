@@ -129,6 +129,28 @@ describe("checkOwnership", () => {
     assert.equal(row.status, "na");
   });
 
+  it("stays n/a on testnet even when PUNO_OWNER names someone else", () => {
+    // One `.env` serves both networks, so the mainnet cold wallet has nowhere to
+    // live except a variable the testnet run also reads. Failing there would make
+    // the testnet verdict permanently red against a contract whose owner is the
+    // deployer by design — and a red that everyone expects stops being read.
+    const row = checkOwnership({
+      credits: A,
+      isTestnet: true,
+      expectedOwner: B,
+      owner: C,
+      pendingOwner: ZERO_ADDRESS,
+    });
+    assert.equal(row.status, "na");
+    assert.match(row.detail, /mainnet expectation/);
+  });
+
+  it("still fails a mainnet mismatch, which is the case that matters", () => {
+    const row = checkOwnership({ ...base, owner: C, pendingOwner: ZERO_ADDRESS });
+    assert.equal(row.status, "fail");
+    assert.match(row.detail, /expects/);
+  });
+
   it("compares addresses case-insensitively", () => {
     // Config is checksummed, JSON-RPC may not be, and an env var is whatever was
     // typed. Comparing as written is how a correct address reports as a mismatch.

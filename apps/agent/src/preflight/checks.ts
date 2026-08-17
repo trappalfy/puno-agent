@@ -196,8 +196,19 @@ export function checkOwnership(input: {
   if (!sameAddress(owner, expectedOwner)) {
     return {
       name,
-      status: "fail",
-      detail: `owner is ${short(owner)}, PUNO_OWNER expects ${short(expectedOwner)}`,
+      // `na` on testnet, for the same reason the two branches above are: this
+      // repo has **one** `.env` shared by both networks, so `PUNO_OWNER` is
+      // necessarily a mainnet expectation sitting in a network-agnostic
+      // variable. Recording the real cold wallet there — which is the only place
+      // it can be recorded — would otherwise turn the testnet run red on a
+      // contract whose owner is the deployer by design, and a red verdict that
+      // everyone learns to expect is worse than no check at all. Two lines up
+      // this function already says "no cold wallet expected on testnet"; it has
+      // to mean that whether or not someone filled the variable in.
+      status: isTestnet ? "na" : "fail",
+      detail: isTestnet
+        ? `${short(owner)} — no cold wallet expected on testnet, PUNO_OWNER is a mainnet expectation`
+        : `owner is ${short(owner)}, PUNO_OWNER expects ${short(expectedOwner)}`,
     };
   }
   return { name, status: "pass", detail: `${short(owner)}, handover accepted` };

@@ -282,10 +282,45 @@ gone from `app/layout.tsx` and `NetworkGuard.tsx` is deleted).
       code work, and the checklist's earlier wording implied otherwise. What was missing, and is
       now done, is that `DeployMainnet` accepts `PUNO_OWNER` and calls `transferOwnership` in the
       deploy transaction (refusing an owner equal to the deployer), and warns loudly when it is
-      unset. **Still open, and operational:** there is no multisig address yet, and two-step
-      means the handover is _not complete_ until that address calls `acceptOwnership()` itself —
-      until then the deployer's hot key still controls the treasury. Verify with
-      `cast call <credits> "owner()"`, never by reading the deploy log.
+      unset. **Still open, and operational:** two-step means the handover is _not complete_ until
+      that address calls `acceptOwnership()` itself — until then the deployer's hot key still
+      controls the treasury. Verify with `cast call <credits> "owner()"`, never by reading the
+      deploy log.
+
+#### The two launch addresses, chosen 2026-08-17 — and what was accepted with them
+
+Both recorded in the root `.env`, both public, both verified as EOAs with valid checksums and
+distinct from the deployer, the service agent and the two incident addresses.
+
+| Role            | Address                                      | What it can do                        |
+| --------------- | -------------------------------------------- | ------------------------------------- |
+| `PUNO_TREASURY` | `0x8bF1775b5e7Bbfc37aE7147C3Bd69c5513d687E3` | receives every payment                |
+| `PUNO_OWNER`    | `0xef048611d7F3077b35Fab260565886186fDa32bA` | owns `PunoCredits`; can move treasury |
+
+**The treasury had to be a second address, and the reason is not tidiness.** `PunoCredits.deposit`
+rejects `msg.sender == treasury`, so a treasury equal to any wallet the owner actually uses means
+that wallet can never buy credit — the payment path becomes untestable from the one account most
+likely to test it. This already happened once: `DeployTestnet` made the deployer both, billing was
+unexercisable out of the box, and it took a manual `setTreasury`. On mainnet `setTreasury` is
+owner-only, so the same mistake costs a cold-wallet transaction rather than a shell command.
+
+**What was accepted, deliberately and with a date: there is no hardware wallet and no multisig, so
+`PUNO_OWNER` is a browser key.** Whoever holds it can redirect every payment the product ever
+takes. Two things bound the exposure and neither removes it: `Ownable2Step` means ownership can be
+handed on later without redeploying, and `withdraw` stays owner-only on each vault so user funds are
+never reachable from here.
+
+**The two addresses are MetaMask accounts 1 and 2, which share one seed.** So the separation is
+organizational — accounting, and the `deposit` rule above — and **not** a security boundary: one
+leaked seed phrase compromises both roles and the owner's everyday wallet at once. Recorded because
+"treasury ≠ owner" reads like two domains and here it is one. The operational consequence is that
+**the seed phrase now needs the same care as the agent key** — written down, verified, stored away
+from the laptop.
+
+Revisit trigger, so this is not carried by memory: the first real revenue, or a hardware wallet
+entering the picture, whichever comes first. Moving is one `transferOwnership` plus one
+`acceptOwnership`, and `preflight` reports the pending state in between rather than calling it done.
+
 - **Contract audit — DEFERRED by decision, 2026-08-16.** Not skipped by oversight and not
   forgotten: the owner reviewed the exposure and chose to carry it for now. Recorded here so the
   decision stays visible instead of becoming an assumption nobody remembers making.
