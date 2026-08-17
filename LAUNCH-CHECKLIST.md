@@ -570,18 +570,30 @@ A 403 or 401 must resolve **immediately**, not after a retry storm. Both are ter
       `execute.ts`. The testnet price keeper broadcasting under `DRY_RUN=true` is the one
       deliberate exception — it touches only mock oracles and cannot reach mainnet.
 
-### 4b. Mainnet deploy — what is proven and what is not (2026-08-16)
+### 4b. Mainnet deploy — done for the factory, 2026-08-17
 
-`DeployMainnet` **simulates cleanly against the live mainnet RPC.** Run from `contracts/` with
-`DEPLOYER_PRIVATE_KEY` in the environment and no `--broadcast`:
+**`DeployMainnet` has been broadcast.** `VaultFactory` is live at
+`0x57b35e8D7F2Bfd27B8D26cDeB7a36eb27Ce5a679` on 4663, deployed at nonce 1 for the reason under the
+ownership section above, with `quoteToken()` read back from chain as mainnet USDG. Mainnet did **not**
+open: `whyClosed()` gates on `punoCredits`, which is the entire point of the split.
 
-| Fact                          | Value                                                                       |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| Chain id seen                 | 4663                                                                        |
-| Gas estimated                 | 3,483,526 at 0.056 gwei                                                     |
-| ETH required (forge estimate) | **0.000196** — expect ~0.00008 real; forge padded 2.4× on testnet           |
-| `PunoCredits`                 | correctly skipped, `PUNO_TOKEN_ADDRESS` unset                               |
-| Deployer balance on 4663      | **0.0011 ETH as of 2026-08-17** — 11× the measured need; no longer blocking |
+One test failed on the config commit and it was right to. `policy.test.ts`'s first case asserted
+`/VaultFactory/` in `whyClosed(NETWORKS.mainnet)` — true only while the factory was the first null,
+so its name ("names the PUNO launch as what closes mainnet today, **not** the factory") described an
+intent the assertion contradicted. With the factory deployed the predicate finally reaches the branch
+it exists for, and the assertion now reads `/PUNO has not launched/` plus `doesNotMatch(/VaultFactory/)`.
+A test pinned to the live table is what caught the state change; keep it that way.
+
+The numbers below are from the run. `DeployPunoCredits` is the deploy still ahead, and it needs
+three values that do not exist yet — see the T-0 section.
+
+| Fact                     | Value                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Chain id seen            | 4663                                                                                                    |
+| Gas used                 | 3,483,526 — the estimate was exact; the gas _price_ was 0.0403 gwei, not the 0.056 seen on 2026-08-16   |
+| ETH required             | **0.0000541 actual**, measured on the real broadcast 2026-08-17; forge estimated 0.000141, padding 2.6× |
+| `PunoCredits`            | correctly skipped, `PUNO_TOKEN_ADDRESS` unset                                                           |
+| Deployer balance on 4663 | **0.001045 ETH** after the deploy and the nonce bump; funded 2026-08-17                                 |
 
 Two things this settled that were open questions:
 
@@ -590,15 +602,17 @@ Two things this settled that were open questions:
 - **USDG hardcoded in the script is correct**: symbol `USDG`, 6 decimals, live at
   `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`.
 
-- [ ] **Bump the deployer's nonce before deploying, or accept a genuinely confusing address.**
-      The deployer's mainnet nonce is 0, so `VaultFactory` would land at
-      `0x5fecF7bA6365E6763b8984c43307B417A498aD40` — **the same address that is Mock USDG on
-      testnet**, because the same deployer at the same nonce produces the same address on any
-      chain. Both would be real, on their own chains, forever. This defeats the one control this
-      project actually has: the standing rule is to check addresses **visually at the moment of
-      use**, and two identical strings cannot be told apart by eye. One self-transaction (~21,000
-      gas) moves the factory to a fresh address and removes the ambiguity permanently. Cheap
-      insurance in a repo whose security incident was an address substitution.
+- [x] **Nonce bumped and the factory deployed, 2026-08-17.** The deployer's mainnet nonce was 0, so
+      `VaultFactory` would have landed at `0x5fecF7bA6365E6763b8984c43307B417A498aD40` — **the same
+      address that is Mock USDG on testnet**, because the same deployer at the same nonce produces
+      the same address on any chain. Confirmed by `cast compute-address`, not assumed. Both would
+      have been real, on their own chains, forever, and two identical strings cannot be told apart by
+      eye — which defeats the one control this project actually has after the clipboard incident. A
+      zero-value self-transfer (21,000 gas, 0.00000042 ETH) moved it. **`VaultFactory` is now at
+      `0x57b35e8D7F2Bfd27B8D26cDeB7a36eb27Ce5a679`**, checked distinct from that address, from both
+      incident addresses, from mainnet USDG and from the testnet factory, and against empty bytecode
+      before broadcasting. Real cost **0.0000541 ETH** against forge's 0.000141 estimate — it pads
+      ~2.6× here, matching the 2.4× measured on testnet. `quoteToken()` reads back as mainnet USDG.
 - [ ] **USDG is an upgradeable proxy that can freeze addresses.** Verified 2026-08-16: EIP-1967,
       implementation `0x68184c449e1a8f34fa18d289737129fd27b66f8f`, UUPS, Paxos-issued, and
       `isFrozen(address)` answers. `VaultFactory` fixes the quote token as **immutable**, so every
@@ -653,14 +667,14 @@ PowerShell here-strings break on `"` in commit messages. Write the message to a 
 critical path is development work any more.** Every remaining item is a decision, a deployment, or
 an external party.
 
-| #     | Item                                                                       | Whose  | State                               |
-| ----- | -------------------------------------------------------------------------- | ------ | ----------------------------------- |
-| ~~1~~ | ~~Dedicated **mainnet worker key**~~ — `0x0aCd6ea5…`, in `serviceAgent`    | ours   | **Done 2026-08-15**                 |
-| ~~2~~ | ~~**Hosting**~~ — web, site and the testnet worker all live; see below     | both   | **Done 2026-08-16/17**              |
-| 3     | **PUNO** exists, with a decided USD rate and a treasury conversion routine | theirs | Not started                         |
-| 4     | `DeployMainnet` run; `vaultFactory`/`punoCredits` written into `config.ts` | both   | Blocked on 3                        |
-| 5     | Multisig created and calling `acceptOwnership()` on `PunoCredits`          | theirs | Not started                         |
-| —     | ~~Audit~~                                                                  | —      | **Deferred by decision 2026-08-16** |
+| #     | Item                                                                                    | Whose  | State                                              |
+| ----- | --------------------------------------------------------------------------------------- | ------ | -------------------------------------------------- |
+| ~~1~~ | ~~Dedicated **mainnet worker key**~~ — `0x0aCd6ea5…`, in `serviceAgent`                 | ours   | **Done 2026-08-15**                                |
+| ~~2~~ | ~~**Hosting**~~ — web, site and the testnet worker all live; see below                  | both   | **Done 2026-08-16/17**                             |
+| 3     | **PUNO** exists, with a decided USD rate and a treasury conversion routine              | theirs | Not started                                        |
+| 4     | ~~`DeployMainnet`~~ done 2026-08-17; `DeployPunoCredits` + `punoCredits` in `config.ts` | both   | **Half done** — factory live, billing blocked on 3 |
+| 5     | Multisig created and calling `acceptOwnership()` on `PunoCredits`                       | theirs | Not started                                        |
+| —     | ~~Audit~~                                                                               | —      | **Deferred by decision 2026-08-16**                |
 
 The dependency is strict: 3 gates 4, 4 gates any real user, and 2 gates all of it being public.
 
@@ -779,7 +793,8 @@ original wording was.
 5. The cold wallet calls `acceptOwnership()`. Verify with `cast call <credits> "owner()"`, never
    from the deploy log — the log says what was requested, the call says what is true.
 6. **One commit** to `config.ts`: `punoToken`, `punoCredits`, and `punoDecimals` if step 2 said
-   anything other than 18. `vaultFactory` is already there from the earlier deploy. Push; the
+   anything other than 18. `vaultFactory` is already there — `0x57b35e8D…a679`, deployed
+   2026-08-17, so this step is one field short of what it used to be. Push; the
    hosts rebuild themselves.
 7. `CREDITS_WATCHER_START_BLOCK` = the block from step 4, then start the mainnet worker.
 8. `preflight` — every row green.

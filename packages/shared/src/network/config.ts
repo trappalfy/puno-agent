@@ -126,7 +126,26 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
       swapRouter02: "0xCaf681a66D020601342297493863E78C959E5cb2",
       quoterV2: "0x5dEdB1F91F5F56177BB4D193aD281b33e4f13098",
     },
-    vaultFactory: null,
+    // Deployed 2026-08-17 and read back from chain rather than from the deploy
+    // log: bytecode present, and `quoteToken()` returns the USDG above exactly.
+    // Real cost 0.0000541 ETH against forge's 0.000141 estimate — it pads ~2.6×
+    // here, matching the 2.4× seen on testnet.
+    //
+    // **Deployed at nonce 1, deliberately.** At nonce 0 the deployer's first
+    // CREATE lands on 0x5fecF7bA6365E6763b8984c43307B417A498aD40, which is Mock
+    // USDG on testnet — the same deployer at the same nonce yields the same
+    // address on every chain. Both would have been real, on their own chains,
+    // forever, and two identical strings cannot be told apart by eye. That
+    // defeats the one control this project actually has after the August
+    // clipboard incident, so a zero-value self-transfer moved the factory to a
+    // fresh address for 0.00000042 ETH. Nothing to redo; recorded because the
+    // reasoning is not recoverable from the address.
+    //
+    // **Recording this does not open mainnet.** `whyClosed()` gates on
+    // `punoCredits`, not on the factory, precisely so the riskiest deploy could be
+    // rehearsed early without letting anyone create an agent that cannot be paid
+    // for. See packages/shared/src/network/policy.ts.
+    vaultFactory: "0x57b35e8D7F2Bfd27B8D26cDeB7a36eb27Ce5a679",
     punoToken: null,
     punoCredits: null,
     // The value the product is built around, and therefore a *requirement* on
@@ -144,10 +163,12 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     // clipboard or a chat; the worker proves the pair at boot and refuses to
     // start on a mismatch (apps/agent/src/chain/serviceAgent.ts).
     //
-    // Holds no ETH yet, so it cannot pay gas for a trade. That is fine until
-    // mainnet has a VaultFactory — the wizard's factory gate fires first — but
-    // it must be funded before the first live vault, or every executeTrade
-    // fails on gas rather than on anything meaningful.
+    // Funded 2026-08-17 with 0.0025 ETH, read back from chain. At the gas price
+    // measured that day that is roughly 160 trades if a real Uniswap V3 swap
+    // costs three times the 260,225 gas the testnet trade burned through
+    // MockRouter, and ~475 at that measured rate. Runway scales inversely with
+    // gas price, so the number to watch is the price; `preflight` prints the
+    // balance on every run.
     serviceAgent: "0x0aCd6ea59305B882FDC42e78b209Ec9bC39926a8",
   },
   testnet: {

@@ -21,12 +21,20 @@ const FACTORY = "0x3333333333333333333333333333333333333333" as const;
 
 describe("whyClosed", () => {
   it("names the PUNO launch as what closes mainnet today, not the factory", () => {
-    // Deliberately specific. The factory is the *first* null, so a naive reading
-    // says mainnet is blocked on deploying it — and deploying it would then look
-    // like it should open the door.
+    // **True for the first time on 2026-08-17, and that is why this assertion
+    // moved.** It read `/VaultFactory/` until then: the factory was the first
+    // null in the real table, so `whyClosed` never reached the PUNO branch and
+    // the name described an intent rather than the behaviour. `VaultFactory` is
+    // deployed to mainnet now, so the branch this predicate exists for is finally
+    // the one that runs.
+    //
+    // This test pins the *live* table — a config edit that accidentally opened
+    // mainnet fails here. The next test pins the behaviour generically, which is
+    // why both are worth keeping rather than one.
     const reason = whyClosed(NETWORKS.mainnet);
     assert.ok(reason, "mainnet must be closed today");
-    assert.match(reason, /VaultFactory/);
+    assert.match(reason, /PUNO has not launched/);
+    assert.doesNotMatch(reason, /VaultFactory/, "the factory exists; it cannot be the reason");
   });
 
   it("still refuses after a VaultFactory is deployed, and says why", () => {
