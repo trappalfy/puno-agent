@@ -741,6 +741,26 @@ null today, and `resolveTokenPrice` already prefers it over anything written by 
 When PUNO has a pool, exactly one function changes and the manual rate demotes itself to the
 fallback it should always have been. Nothing else in the pricing path moves.
 
+**Deferred by decision on 2026-08-17, with a trigger rather than a someday.** The owner's
+instruction is that mainnet reads the price live; the deferral is about sequencing, not about
+whether. Building it now would be automation against zero deposit flow, and the manual path
+became liveable in the same pass — 72 h window, refreshable at any time, so the job is
+remembering once a day with two misses of slack.
+
+**The trigger is an observable event, not a judgement: the first deposit that arrives on a day
+nobody refreshed the rate.** That is the first moment a real person waits on our schedule, and it
+is the signal that the manual path has been outgrown. Watch for it in the worker log — a
+`[credits] cannot value deposit` line is exactly that event.
+
+Two things about it that are easy to get wrong later, so they are recorded now. It **can be built
+before PUNO exists**, because the precondition is depth in _some_ pool for the code path, and the
+mainnet Uniswap V3 deployment already has real USDG pools to verify against
+(`PHASE4-ROUTING-2026-08-14.md`); at T-0 the pool address changes and nothing else. And the pool
+**exists on day one** rather than later, because the owner seeds it — "when PUNO has a pool" is
+T-0, not a distant milestone. Add a **liquidity floor** that returns `null` below a threshold so a
+thin launch-day pool falls back to the manual rate and the system switches itself over as depth
+grows, with no second code change.
+
 **Read the pool, not a price API.** DexScreener does index this chain (`chainId: "robinhood"`,
 confirmed 2026-08-16) and is the obvious thing to reach for once trading starts, but it is the
 wrong input for the crediting path on three counts, none of them about uptime. It reports spot,
