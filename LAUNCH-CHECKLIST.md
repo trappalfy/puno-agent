@@ -1070,7 +1070,8 @@ rather than in a host's secret store. Both are listed above under the ownership 
 absent: CI and a worker health endpoint.
 
 **Deployed 2026-08-16 and verified by fetching it:** Postgres on Neon with all thirteen tables,
-`https://puno-agent-web.vercel.app` serving, and `/api/pricing` returning the rate written by
+`https://app.puno.ink` serving — `puno-agent-web.vercel.app` at the time, custom domains attached
+2026-08-18 — and `/api/pricing` returning the rate written by
 `set-rate` — `source: "override"`, $0.000001, with `pricesTokens` at 10K / 500K / 250K PUNO. That
 one response proves the whole chain end to end: Vercel reaches Neon, the rate is stored, and the
 USD-to-PUNO conversion runs server-side as designed.

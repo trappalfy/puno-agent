@@ -335,8 +335,10 @@ paths stay English inside it: those are typed, not read.
 
 **Deployment lives in `DEPLOYMENT.md`**; artifacts are `apps/agent/Dockerfile`,
 `apps/agent/fly.testnet.toml` and a `vercel.json` per app. **All three are deployed and verified
-by execution on 2026-08-16/17** — `puno-agent-web.vercel.app`, `puno-agent-site.vercel.app`, and
-the testnet worker on Fly signing as `serviceAgent` from a single machine. Traps recorded there,
+by execution on 2026-08-16/17** — the product app, the landing and the testnet worker. Custom
+domains were attached 2026-08-18: the product is `app.puno.ink`, the landing `puno.ink`, and the
+two `*.vercel.app` addresses now return 404 rather than redirecting. The worker on Fly signs as
+`serviceAgent` from a single machine. Traps recorded there,
 all found the same way:
 
 `fly deploy` must run with the repository root as its working directory — `fly deploy .` from the
