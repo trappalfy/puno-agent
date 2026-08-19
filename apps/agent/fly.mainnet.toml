@@ -66,7 +66,7 @@ NETWORK = "mainnet"
 # product started trading real money is a dated entry in the history rather than
 # a flag someone set from a shell:
 #
-#   DRY_RUN = "false"
+DRY_RUN = "false"
 #
 # Do not skip it and rely on the default the other way round. Paper mode is not
 # a safe no-op once users exist: `runTick` ORs the process-wide flag with
