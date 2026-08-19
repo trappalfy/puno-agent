@@ -20,21 +20,16 @@ const CREDITS = "0x2222222222222222222222222222222222222222" as const;
 const FACTORY = "0x3333333333333333333333333333333333333333" as const;
 
 describe("whyClosed", () => {
-  it("names the PUNO launch as what closes mainnet today, not the factory", () => {
-    // **True for the first time on 2026-08-17, and that is why this assertion
-    // moved.** It read `/VaultFactory/` until then: the factory was the first
-    // null in the real table, so `whyClosed` never reached the PUNO branch and
-    // the name described an intent rather than the behaviour. `VaultFactory` is
-    // deployed to mainnet now, so the branch this predicate exists for is finally
-    // the one that runs.
-    //
-    // This test pins the *live* table — a config edit that accidentally opened
-    // mainnet fails here. The next test pins the behaviour generically, which is
-    // why both are worth keeping rather than one.
-    const reason = whyClosed(NETWORKS.mainnet);
-    assert.ok(reason, "mainnet must be closed today");
-    assert.match(reason, /PUNO has not launched/);
-    assert.doesNotMatch(reason, /VaultFactory/, "the factory exists; it cannot be the reason");
+  it("pins the live table as OPEN, now that PUNO has launched", () => {
+    // **Inverted on 2026-08-20, when the token launched and PunoCredits was
+    // deployed.** This assertion has tracked the live table through three
+    // states: it named VaultFactory, then the PUNO launch, and now the absence
+    // of any reason at all. It is deliberately pinned to the real config rather
+    // than a fixture, so a config edit that accidentally *closes* mainnet — the
+    // failure that now costs money — fails here. The generic behaviour it used
+    // to cover is pinned by the next test, which states its own preconditions.
+    assert.equal(whyClosed(NETWORKS.mainnet), null, "mainnet is open as of 2026-08-20");
+    assert.equal(isOpenForBusiness(NETWORKS.mainnet), true);
   });
 
   it("still refuses after a VaultFactory is deployed, and says why", () => {
@@ -43,7 +38,9 @@ describe("whyClosed", () => {
     // dependency and doing it early de-risks T-0. That must not open the wizard:
     // a vault nobody can buy credit for is worse than no vault, because the user
     // has already paid for every signature.
-    const reason = whyClosed(table({ mainnet: { vaultFactory: FACTORY } }).mainnet);
+    const reason = whyClosed(
+      table({ mainnet: { vaultFactory: FACTORY, punoToken: null, punoCredits: null } }).mainnet,
+    );
     assert.ok(reason, "mainnet must stay closed until PUNO exists");
     assert.match(reason, /PUNO has not launched/);
   });
@@ -84,7 +81,8 @@ describe("whyClosed", () => {
  */
 describe("creditsNetworkFrom", () => {
   it("sells credit on testnet while mainnet has no contracts", () => {
-    assert.equal(creditsNetworkFrom(table())?.key, "testnet");
+    const chosen = creditsNetworkFrom(table({ mainnet: { punoToken: null, punoCredits: null } }));
+    assert.equal(chosen?.key, "testnet");
   });
 
   it("hands billing to mainnet the moment both of its addresses exist", () => {
@@ -98,12 +96,17 @@ describe("creditsNetworkFrom", () => {
     // The exact half-configured state between the token launching and
     // PunoCredits being deployed. `PunoCredits.token` is immutable, so this
     // window is unavoidable rather than hypothetical.
-    const chosen = creditsNetworkFrom(table({ mainnet: { punoToken: PUNO } }));
+    const chosen = creditsNetworkFrom(table({ mainnet: { punoToken: PUNO, punoCredits: null } }));
     assert.equal(chosen?.key, "testnet");
   });
 
   it("returns null when nothing anywhere can take a payment", () => {
-    const chosen = creditsNetworkFrom(table({ testnet: { punoToken: null, punoCredits: null } }));
+    const chosen = creditsNetworkFrom(
+      table({
+        mainnet: { punoToken: null, punoCredits: null },
+        testnet: { punoToken: null, punoCredits: null },
+      }),
+    );
     assert.equal(chosen, null);
   });
 });

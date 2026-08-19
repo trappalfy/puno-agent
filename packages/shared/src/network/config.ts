@@ -147,7 +147,7 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     // for. See packages/shared/src/network/policy.ts.
     vaultFactory: "0x57b35e8D7F2Bfd27B8D26cDeB7a36eb27Ce5a679",
     punoToken: "0x76d30EF377aA50D1785062881Eec244f1072A084",
-    punoCredits: null,
+    punoCredits: "0xf9e5e3ac9E2f6B43D871A464D9BeDe1df3C9F28f",
     // The value the product is built around, and therefore a *requirement* on
     // the token rather than an observation of it — PUNO must launch with 18.
     // Verified against the deployed token by `preflight` before mainnet opens.
