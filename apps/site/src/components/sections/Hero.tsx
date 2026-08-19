@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { ChevronDown } from "lucide-react";
 import { CtaButton } from "../primitives/CtaButton";
 import { links } from "../../lib/config";
+import { ContractAddress } from "../primitives/ContractAddress";
 
 export function Hero() {
   return (
@@ -50,6 +51,18 @@ export function Hero() {
         <span className="text-xs text-white/40">
           Free, no vault to deploy · Testnet live on Robinhood Chain · 46630
         </span>
+      </motion.div>
+
+      {/* Renders nothing until NETWORKS.mainnet.punoToken is set, so this line
+          simply appears at launch rather than needing a layout change on the
+          day. Below the CTA deliberately: the address is what a visitor who
+          already decided comes for, not what convinces the one who has not. */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.9, duration: 0.7 }}
+      >
+        <ContractAddress />
       </motion.div>
 
       {/* Nothing is visible below the fold now, so without a cue a full-bleed

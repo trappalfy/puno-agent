@@ -146,7 +146,7 @@ export const NETWORKS: Record<NetworkKey, NetworkConfig> = {
     // rehearsed early without letting anyone create an agent that cannot be paid
     // for. See packages/shared/src/network/policy.ts.
     vaultFactory: "0x57b35e8D7F2Bfd27B8D26cDeB7a36eb27Ce5a679",
-    punoToken: null,
+    punoToken: "0x76d30EF377aA50D1785062881Eec244f1072A084",
     punoCredits: null,
     // The value the product is built around, and therefore a *requirement* on
     // the token rather than an observation of it — PUNO must launch with 18.
